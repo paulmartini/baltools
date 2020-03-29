@@ -5,7 +5,7 @@ baltools
 Introduction
 ------------
 
-Code to identify, characterize, and simulate BAL QSOs. 
+Tools to identify, characterize, and simulate BAL QSOs. 
 
 
 Installation
@@ -13,7 +13,7 @@ Installation
 
 These tools include dependencies to several DESI packages, and it should be most straightforward to use them at NERSC. 
 
-In this case manually install them from the git checkout and then add the "py" directory to your $PYTHONPATH environment variable. 
+Manually install them from the git checkout and then add the "py" directory to your $PYTHONPATH environment variable. 
 
 Getting Started
 ---------------
