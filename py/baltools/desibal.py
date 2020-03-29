@@ -11,8 +11,10 @@ Adapted from classifydesiqso by Victoria Niu
 
 """
 
+import os
 import numpy as np
 import fitsio
+from astropy.io import fits
 import desispec.io
 from desispec.coaddition import coadd_cameras
 from collections import defaultdict
