@@ -1,11 +1,11 @@
 """
 
-createbaltruth.py
-=================
+baltools.createbaltruth
+=======================
 
-Based on balfinder.baltable 
+Create truth catalogs for DESI mocks with BAL features
 
-updatebaltable()  Update BAL values in a row of the BAL table
+TODO: Reconcile/merge with baltable? 
 
 """
 
@@ -28,7 +28,7 @@ def createbaltruth(baldir):
     thdu = fits.open(truthfile) 
 
     # Open the BAL Template File
-    baltempfile = '/global/projecta/projectdirs/desi/spectro/templates/basis_templates/v3.2/bal_templates_v3.0.fits'
+    baltempfile = '/global/cfs/projectdirs/desi/spectro/templates/basis_templates/v3.2/bal_templates_v3.0.fits'
     baltemphdu = fits.open(baltempfile)
 
     # Create an empty BAL Truth Catalog in the same directory as the Truth Catalog

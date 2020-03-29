@@ -1,9 +1,9 @@
 """
 
-bal.utils
-=========
+baltools.utils
+==============
 
-Module for file IO, download, etc.
+Module with tools for file IO, download, etc. for analysis of SDSS spectra
 
 2018 by PM
 
@@ -29,13 +29,6 @@ def zeropad(input, N=4):
     Extend the size of an input string of integers to length N
     '''
 
-    #if type(input) == str:
-    #    if len(input) > N:
-    #        print("Error: len(%s) > %d" % (input, N))
-    #    while len(input) < N:
-    #        input = '0' + input
-    #else:
-    #    print("Error: Argument must be a string")
     if type(input) == str: 
         if N == 3: 
             output = "{:03d}".format(int(input))
@@ -301,50 +294,3 @@ def getdr16spectra(array, verbose=True):
         
     return spec
 
-'''
-def getdr14spec(array):
-    Return the complete path to a local version of a DR14 QSO spectrum
-    array is the row of the DR14 QSO catalog for that QSO
-    returns path+filename and True/False if file is present
-    
-    # speclitedir = "../../../../dr14_spectra/spec-lite/"
-    speclitedir = "/Users/martini/Data/"
-    run2d = 'v5_10_0'
-    spectro = str(array['SPECTRO'])
-    plate4 = str(array['PLATE'])
-    fiberid4 = str(array['FIBERID'])
-    mjd = array['MJD']
-    if spectro == 'SDSS':
-        run2d = '26'
-        if int(plate4) in seguelist:
-            run2d = '103'
-    if plate4 == '2865':
-        mjd = '54503'
-    if plate4 == '2516':
-        mjd = '54241'
-    if plate4 == '2812':
-        mjd = '54639'
-    plate4 = zeropad(plate4)
-    fiberid4 = zeropad(fiberid4)
-    specfits = "spec-%s-%s-%s.fits" % (plate4, mjd, fiberid4)
-    dr14spec = speclitedir+"%s/%s/%s" % (run2d, plate4, specfits)
-    dr14spec = speclitedir+plate4+"/%s" % (specfits)
-    dr14specurl = "http://dr12.sdss3.org/sas/dr12/%s/spectro/redux/%s/spectra/%s/%s" % (detector, run2d, plate4, specfits)
-
-    if os.path.isfile(dr14spec):
-        return dr14spec, True
-    else:
-        return dr14spec, False
-
-
-    try:
-        specfile = os.environ.get('SPECDIR')+specfits
-        spec = fitsio.read(specfile)
-        if verbose:
-            print ("Found %s on disk" % specfits)
-    except:
-        urllib.request.urlretrieve(specurl, specfits)
-        spec = fitsio.read(specfits)
-        if verbose:
-            print ("Downloaded %s" % specfits)
-'''

@@ -1,7 +1,7 @@
 """
 
-bal.fitbal
-==========
+baltools.fitbal
+===============
 
 Routines to fit PCA components to QSOs and calculate BAL properties
 
@@ -428,7 +428,7 @@ def calculatebalinfo(idata, model, verbose=False):
 
     #############
 
-    # Repeat measurement for SIV region if that entire region is in the 
+    # Repeat measurement for SiIV region if that entire region is in the 
     # bandpass. This requires balwave[0] > 1281.5 or z > 1.8 
 
     if verbose: 

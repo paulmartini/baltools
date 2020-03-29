@@ -1,7 +1,7 @@
 """
 
-balfinder.balconfig
-===================
+baltools.balconfig
+==================
 
 Common modules and global variables used by balfinder
 

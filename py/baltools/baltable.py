@@ -1,9 +1,9 @@
 """
 
-bal.baltable
-============
+baltools.baltable
+=================
 
-Routines to build the output BAL catalog
+Routines to build BAL catalogs
 
 2018 original code by Zhiyuan Guo
 2019 updated and expanded by Paul Martini

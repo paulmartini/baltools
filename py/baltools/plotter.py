@@ -1,7 +1,7 @@
 """
   
-balfinder.plotter 
-=================
+baltools.plotter 
+================
 
 Various convenience plotting routines 
 
