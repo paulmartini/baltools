@@ -26,14 +26,14 @@ Overview
 
 Here is a brief description of the files in the "py" directory:
 
-``balconfig.py'' : common modules and global variables used by balfinder
+**balconfig.py** : common modules and global variables used by balfinder
 
-``baltable.py'' : routines to construct BAL catalogs
+**baltable.py** : routines to construct BAL catalogs
 
-``desibal.py'' : main balfinder for DESI
+**desibal.py** : main balfinder for DESI
 
-``fitbal.py'' : core code to identify and characterize BALs
+**fitbal.py** : core code to identify and characterize BALs
 
-``plotter.py'' : various convenience plotting routines
+**plotter.py** : various convenience plotting routines
 
-``utils.py'' : utilities for manipulating SDSS spectra
+**utils.py** : utilities for manipulating SDSS spectra
