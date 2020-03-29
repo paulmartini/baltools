@@ -17,8 +17,9 @@ PM Notes:
 import math
 import numpy as np
 import scipy.optimize as opt
-import balconfig as bc
 import warnings
+
+from baltools import balconfig as bc
 
 import matplotlib.pyplot as plt
 

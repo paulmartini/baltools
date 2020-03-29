@@ -15,8 +15,9 @@ import numpy as np
 import urllib
 import json
 from astropy.io import fits
-import balconfig as bc
 import fitsio
+
+from baltools import balconfig as bc
 
 seguelist = np.asarray([1960, 1961, 1962, 1963, 2078, 2079, 2174,
                         2185, 2247, 2255, 2256, 2333, 2338, 2377,

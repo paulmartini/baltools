@@ -11,13 +11,14 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 from astropy.io import fits 
-import utils
-import fitbal 
-import baltable
-import balconfig as bc
 from astropy import constants as const
 import fitsio
 import desispec.io
+
+from baltools import utils
+from baltools import fitbal 
+from baltools import baltable
+from baltools import balconfig as bc
 
 c = const.c.to('km/s').value         # speed of light in km/s
 

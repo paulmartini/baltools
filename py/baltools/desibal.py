@@ -13,12 +13,13 @@ Adapted from classifydesiqso by Victoria Niu
 
 import numpy as np
 import fitsio
-import fitbal
-import balconfig as bc
-import baltable
 import desispec.io
 from desispec.coaddition import coadd_cameras
 from collections import defaultdict
+
+from baltools import fitbal
+from baltools import balconfig as bc
+from baltools import baltable
 
 
 def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False): 

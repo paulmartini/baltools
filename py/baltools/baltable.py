@@ -24,8 +24,8 @@ from __future__ import print_function, absolute_import, division
 from astropy.io import fits
 import numpy as np
 import os
-import fitbal
-import balconfig as bc 
+from baltools import fitbal
+from baltools import balconfig as bc 
 
 
 # TODO: remove astropy dependency
