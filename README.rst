@@ -15,6 +15,8 @@ These tools include dependencies to several DESI packages, and it should be most
 
 Manually install them from the git checkout and then add the "py" directory to your $PYTHONPATH environment variable. 
 
+Also, the code expects that you have a directory called "Catalogs/" in your home director that contains the file PCA_Eigenvectors.fits that is in the data/ directory of this repository.
+
 Getting Started
 ---------------
 
