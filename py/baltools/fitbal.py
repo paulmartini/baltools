@@ -451,11 +451,12 @@ def calculatebalinfo(idata, model, verbose=False):
         speed_c = speed[speed_min:speed_max]
         normal_flux_bi = balspec[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
         normal_flux_ai = balspec[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
-        plotmax = plotmin + 500
+        # plotmax = plotmin + 500
+        plotmax = np.where(speed >= bc.VMAX_BAL)[0][0]   # Changed 29 Mar 2020 by PM
         sigma_bi = sigma_origin[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
         sigma_ai = sigma_origin[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
 
-        # Determine SIIV AI troughs
+        # Determine SiIV AI troughs
         if np.median(balspec[plotmin:speed_max_ai]) > np.median(sigma_origin[plotmin:speed_max_ai]): 
             start_indx, end_indx = determine_trough_AI(normal_flux_ai, sigma_ai, speed_c_ai)
         else: 
