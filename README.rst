@@ -22,9 +22,11 @@ Getting Started
 
 See the notebook "DESI balfinder tutorial" in the "doc" directory for examples of how to run the balfinder on SV data and on mocks. 
 
+Another option is to run "bin/runbalfinder.py" on the command line. This will run on all spectra for a given tile. There are various options, including to restrict the date range and spectrographs.
 
-Overview
---------
+
+Tour of Code
+------------
 
 Here is a brief description of the files in the "py" directory:
 
