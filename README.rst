@@ -13,9 +13,9 @@ Installation
 
 These tools include dependencies to several DESI packages, and it should be most straightforward to use them at NERSC. 
 
-Manually install them from the git checkout and then add the "py" directory to your $PYTHONPATH environment variable. 
+To install, clone the repository, add the "py" directory to your $PYTHONPATH, and the "bin" directory to your $PATH. 
 
-Also, the code expects that you have a directory called "Catalogs/" in your home directory that contains the file PCA_Eigenvectors.fits that is in the data/ directory of this repository.
+Note the code expects that you have a directory called "Catalogs/" in your home directory that contains the file PCA_Eigenvectors.fits that is in the data/ directory of this repository.
 
 Getting Started
 ---------------
