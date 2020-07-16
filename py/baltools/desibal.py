@@ -47,12 +47,12 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
     -------
     none
     ''' 
-    # Define some variable names based on the type of input file 
-    if 'spectra-' in specfilename: 
+    # Define some variable names based on the type of input file
+    if 'spectra-' in specfilename:
         specshort = specfilename[specfilename.rfind('spectra-'):specfilename.rfind('.fits')]
         zshort = specshort.replace('spectra', 'zbest')
         zfilename = specfilename.replace(specshort, zshort)
-    elif 'coadd-' in specfilename: 
+    elif 'coadd-' in specfilename:
         specshort = specfilename[specfilename.rfind('coadd-'):specfilename.rfind('.fits')]
         zshort = specshort.replace('coadd', 'zbest')
         zfilename = specfilename.replace(specshort, zshort)
@@ -60,39 +60,36 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
         print("Error: unable to find redshift file for {}".format(specfilename))
         return
 
-
-    # Define output file name and check if it exists if overwrite=False 
-    if 'spectra-' in specfilename: 
+    # Define output file name and check if it exists if overwrite=False
+    if 'spectra-' in specfilename:
         balshort = specshort.replace('spectra-', 'baltable-')
-    elif 'coadd-' in specfilename: 
+    elif 'coadd-' in specfilename:
         balshort = specshort.replace('coadd-', 'baltable-')
     else:
         print("Error: unable to interpret {}".format(specfilename))
         return
-    
+
     baltmp = specfilename.replace(specshort, balshort)
-    
-    if altbaldir is not None: 
+
+    if altbaldir is not None:
         balfilename = os.path.join(altbaldir + "/", baltmp[baltmp.rfind("baltable-")::])
-    else: 
+    else:
         balfilename = baltmp
-        
+
     print("Output BAL catalog:", balfilename)
-    
+
     if os.path.isfile(balfilename) and not overwrite:
         print("Bal catalog already exist")
         return
-    
 
-    # Read in the DESI spectra 
+    # Read in the DESI spectra
     specobj = desispec.io.read_spectra(specfilename)
 
-    # See if 3 cameras are coadded, and coadd them if they are not: 
-    # (at least some of the mock data are not coadded) 
+    # See if 3 cameras are coadded, and coadd them if they are not:
+    # (at least some of the mock data are not coadded)
     if 'brz' not in specobj.wave.keys():
         specobj = coadd_cameras(specobj, cosmics_nsig=None)
 
-    
 
     zs = fitsio.read(zfilename)
 
@@ -110,13 +107,13 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
         if zmask[index]: 
             dd[item].append(index)
             zqsos.append(index)
-            
+
     fm = specobj.fibermap
     # Create a list of the indices in specobj on which to run balfinder
     qsos = [index for item in fm["TARGETID"] for index in dd[item] if item in dd]
 
 
-    # Initialize the BAL table with all quasars in 'qsos' 
+    # Initialize the BAL table with all quasars in 'qsos'
     baltable.initbaltab_desi(fm[qsos], zs[zqsos], balfilename, overwrite=overwrite)
 
     balhdu = fits.open(balfilename) 
