@@ -112,17 +112,21 @@ def initbaltab_desi(specdata, zdata, outputfile, overwrite=False):
     col0 = fits.Column(name='TARGETID', format='K', array=specdata['TARGETID'])
     col1 = fits.Column(name='TARGET_RA', format='E', array=specdata['TARGET_RA'])
     col2 = fits.Column(name='TARGET_DEC', format='E', array=specdata['TARGET_DEC'])
+    col3 = fits.Column(name='NIGHT', format='K', array=specdata['NIGHT'])
+    col4 = fits.Column(name='EXPID', format='K', array=specdata['EXPID'])
+    col5 = fits.Column(name='MJD', format='E', array=specdata['MJD'])
+    col6 = fits.Column(name='TILEID', format='k', array=specdata['TILEID'])
 
     # Columns to copy from the redshift data
-    col3 = fits.Column(name='Z', format='E', array=zdata['Z'])
-    col4 = fits.Column(name='ZERR', format='E', array=zdata['ZERR'])
-    col5 = fits.Column(name='ZWARN', format='E', array=zdata['ZWARN'])
+    col7 = fits.Column(name='Z', format='E', array=zdata['Z'])
+    col8 = fits.Column(name='ZERR', format='E', array=zdata['ZERR'])
+    col9 = fits.Column(name='ZWARN', format='E', array=zdata['ZWARN'])
 
     # PCA Fit Coefficients and chisq result
     pca_array = np.zeros([NROWS, bc.NPCA], dtype=float)  # PCA Fit Coefficients
-    col6 = fits.Column(name='PCA_COEFFS', format='5E', array=pca_array)
+    col10 = fits.Column(name='PCA_COEFFS', format='5E', array=pca_array)
     pca_chi2 = np.zeros([NROWS], dtype=float)  # PCA reduced chi2
-    col7 = fits.Column(name='PCA_CHI2', format='E', array=pca_chi2)
+    col11 = fits.Column(name='PCA_CHI2', format='E', array=pca_chi2)
 
     # Collection of empty arrays to set up rest of the BAL catalog
     # PM Note: Might change to -1. to indicate empty field
@@ -170,7 +174,7 @@ def initbaltab_desi(specdata, zdata, outputfile, overwrite=False):
     balhead = fits.Header({'SIMPLE': True})
     balhead['EXTNAME'] = "BALCAT"
     tabhdu = fits.BinTableHDU.from_columns([col0, col1, col2, col3, col4, col5,
-                                            col6, col7, 
+                                            col6, col7, col8, col9, col10, col11, 
                                             col25, col26,
                                             col27, col28, col29, col30, col31,
                                             col32, col33, col34, col35, col36,
