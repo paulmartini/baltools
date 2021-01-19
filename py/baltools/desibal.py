@@ -93,8 +93,6 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
             wave_min = np.min(specobj.wave['b'])
             wave_max= np.max(specobj.wave['z'])
             specobj = resample_spectra_lin_or_log(specobj,linear_step=0.8, wave_min =wave_min, wave_max =wave_max, fast = True)
-            print(specobj.wave)
-            print("resampled flux")
             specobj = coadd_cameras(specobj, cosmics_nsig=None)
             
 
@@ -107,7 +105,8 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
     # BAL_ZMAX = 5.6
     zmask = zs['Z'] > bc.BAL_ZMIN
     zmask = zmask*(zs['Z'] < bc.BAL_ZMAX)
-    zmask = zmask*(zs['SPECTYPE'] == b'QSO')
+        
+    zmask = zmask*(zs['SPECTYPE'] =='QSO')
 
     zqsos = []
     dd = defaultdict(list)
