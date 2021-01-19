@@ -195,6 +195,7 @@ def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680):
     '''
     Plot spectrum of a BAL in specobj with TARGETID. 
     Wrapper for plotbal()
+    Default is to plot data coadded across cameras, otherwise will just plot all three
 
     Parameters
     ----------
@@ -214,10 +215,6 @@ def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680):
     none
     '''
 
-    if 'brz' not in specobj.wave.keys():
-        print("Error: you must coadd the camera data first") 
-        return
-
     # find QSO index of TARGETID in specobj: 
     fm = specobj.fibermap
     qindx = np.where(fm['TARGETID'] == targetid)[0][0]
@@ -230,11 +227,23 @@ def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680):
     pcaeigen = fitsio.read(bc.pcaeigenfile)
 
     # Create the spectrum for the figure: 
-    qsospec = np.zeros(len(specobj.wave['brz']),dtype={'names':('wave', 'flux', 'ivar', 'model'), 'formats':('>f8', '>f8', '>f8', '>f8')})
-    qsospec['wave'] = specobj.wave['brz']
-    qsospec['flux'] = specobj.flux['brz'][qindx]
-    qsospec['ivar'] = specobj.ivar['brz'][qindx]
-    qsospec['model'] = np.zeros(len(specobj.wave['brz'])) # for SDSS compatibility
+    if 'brz' in specobj.wave.keys():
+        qsospec = np.zeros(len(specobj.wave['brz']),dtype={'names':('wave', 'flux', 'ivar', 'model'), 'formats':('>f8', '>f8', '>f8', '>f8')})
+        qsospec['wave'] = specobj.wave['brz']
+        qsospec['flux'] = specobj.flux['brz'][qindx]
+        qsospec['ivar'] = specobj.ivar['brz'][qindx]
+        qsospec['model'] = np.zeros(len(specobj.wave['brz'])) # for SDSS compatibility
+    else: 
+        print("Warning: using non-coadded camera data")
+        nwaves = len(specobj.wave['b']) + len(specobj.wave['r']) + len(specobj.wave['z'])
+        qsospec = np.zeros(nwaves,dtype={'names':('wave', 'flux', 'ivar', 'model'), 'formats':('>f8', '>f8', '>f8', '>f8')})
+        qsospec['wave'] = np.concatenate([specobj.wave['b'], specobj.wave['r'], specobj.wave['z']])
+        qsospec['flux'] = np.concatenate([specobj.flux['b'][qindx], specobj.flux['r'][qindx], specobj.flux['z'][qindx]])
+        qsospec['ivar'] = np.concatenate([specobj.ivar['b'][qindx], specobj.ivar['r'][qindx], specobj.ivar['z'][qindx]])
+        ind = np.argsort(qsospec['wave'])
+        qsospec['wave'] = qsospec['wave'][ind]
+        qsospec['flux'] = qsospec['flux'][ind]
+        qsospec['ivar'] = qsospec['ivar'][ind]
 
     # Get the balinfo for the figure 
     balinfo = baltable.cattobalinfo(balcat[bindx])
