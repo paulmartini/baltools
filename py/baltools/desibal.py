@@ -14,6 +14,8 @@ Adapted from classifydesiqso by Victoria Niu
 import os
 import numpy as np
 import fitsio
+from time import gmtime, strftime
+
 from astropy.io import fits
 import desispec.io
 from desispec.coaddition import coadd_cameras
@@ -22,6 +24,7 @@ from collections import defaultdict
 from baltools import fitbal
 from baltools import balconfig as bc
 from baltools import baltable
+
 
 
 def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False): 
@@ -79,7 +82,7 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
     print("Output BAL catalog:", balfilename)
 
     if os.path.isfile(balfilename) and not overwrite:
-        print("Bal catalog already exist")
+        print("BAL catalog already exists and overwrite/clobber = False")
         return
 
     # Read in the DESI spectra
@@ -141,4 +144,6 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
         print("Wrote BAL catalog {0}".format(balfilename))
 
     balhdu.writeto(balfilename, overwrite=True)
+    lastupdate = "Last updated {0} UT by {1}".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+    fits.setval(balfilename, 'HISTORY', value=lastupdate, ext=1)
 

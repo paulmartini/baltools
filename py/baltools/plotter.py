@@ -8,6 +8,7 @@ Various convenience plotting routines
 """
 
 import numpy as np
+import os
 import random
 import matplotlib.pyplot as plt
 from astropy.io import fits 
@@ -190,6 +191,40 @@ def plotbalfromcat(array, lam1=1260, lam2=1680, gmflag=False, verbose=False):
     ax.legend(loc='lower right', fontsize=14)
     plt.xlim(lam1, lam2)
     plt.show()
+
+def plotdesibal2(datadir, balcat, targetid, lam1=1340, lam2=1680): 
+    '''
+    Plot spectrum of a BAL with TARGETID. 
+    Finds the coadd data for the BAL
+    Wrapper for plotdesibal()
+
+    Parameters
+    ----------
+    datadir : directory 
+        root directory  of data release
+    balcat : numpy recarray
+        BAL catalog that corresponds to specobj
+    targetid : int
+        DESI TARGETID
+    lam1 : float, optional
+        first wavelength to plot (default is 1340)
+    lam2 : float, optional
+        last wavelength to plot (default is 1680)
+
+    Returns
+    -------
+    none
+    '''
+
+    qindx = np.where(balcat['TARGETID'] == targetid)[0][0]
+    tileid = str(balcat['TILEID'][qindx])
+    night = str(balcat['NIGHT'][qindx])
+    sp = str(balcat['PETAL_LOC'][qindx])
+    coaddpath = os.path.join(datadir, 'tiles', tileid, night)
+    coaddfile = coaddpath + '/coadd-' + sp + '-' + tileid + '-' + night + '.fits'
+    specobj = desispec.io.read_spectra(coaddfile)
+    
+    plotdesibal(specobj, balcat, targetid, lam1, lam2)
 
 def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680): 
     '''

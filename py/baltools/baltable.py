@@ -417,11 +417,13 @@ def initbaltab_sdss(qsocatfile, outputfile):
     # This returns 296,090
     '''
 
+    if 'DR14Q' in qsocat[1].header['EXTNAME']:
+        mask = tabhdu.data['Z'] >= bc.BAL_ZMIN
+        mask = mask*(tabhdu.data['Z'] <= bc.BAL_ZMAX)
+    else: 
     # Switched to use Z_PCA for DR16 
-    #mask = tabhdu.data['Z'] >= bc.BAL_ZMIN
-    #mask = mask*(tabhdu.data['Z'] <= bc.BAL_ZMAX)
-    mask = tabhdu.data['Z_PCA'] >= bc.BAL_ZMIN
-    mask = mask*(tabhdu.data['Z_PCA'] <= bc.BAL_ZMAX)
+        mask = tabhdu.data['Z_PCA'] >= bc.BAL_ZMIN
+        mask = mask*(tabhdu.data['Z_PCA'] <= bc.BAL_ZMAX)
     print("BAL table has {0} rows".format(sum(mask)))
     # This returns 320,760 with '>' and 320,860 with '>='
 
