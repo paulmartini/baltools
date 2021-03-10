@@ -114,7 +114,11 @@ def initbaltab_desi(specdata, zdata, outputfile, overwrite=False):
     col2 = fits.Column(name='TARGET_DEC', format='E', array=specdata['TARGET_DEC'])
     col3 = fits.Column(name='NIGHT', format='K', array=specdata['NIGHT'])
     col4 = fits.Column(name='EXPID', format='K', array=specdata['EXPID'])
-    col5 = fits.Column(name='MJD', format='E', array=specdata['MJD'])
+    if 'MJD' in specdata.colnames :
+        col5 = fits.Column(name='MJD', format='E', array=specdata['MJD'])
+    else :
+        col5 = fits.Column(name='MJD', format='E', array=np.empty(NROWS, dtype=float))
+        
     col6 = fits.Column(name='TILEID', format='k', array=specdata['TILEID'])
 
     # Columns to copy from the redshift data
