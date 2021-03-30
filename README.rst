@@ -41,3 +41,4 @@ Here is a brief description of the files in the "py" directory:
 **plotter.py** : various convenience plotting routines
 
 **utils.py** : utilities for manipulating SDSS spectra
+
