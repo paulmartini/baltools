@@ -30,7 +30,7 @@ BAL_LAMBDA_MAX = 2399.    # Maximum wavelength for PCA
 # Redshift range for BAL Catalog
 # QSOs only within BAL_ZMIN <= z <= BAL_ZMAX
 BAL_ZMIN = 1.57
-BAL_ZMAX = 5.6 # Use this for DR14 
+BAL_ZMAX = 5.0 # Use this for DR14 
 # BAL_ZMAX = 5.0 # Changed Mar 2020 by PM
 
 NPCA = 5	    # Number of PCA coefficients
