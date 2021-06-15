@@ -27,7 +27,7 @@ from baltools import baltable
 
 
 
-def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False): 
+def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, release=None): 
     '''
     Find BALs in DESI quasars
     1. Identify all objects classified as quasars that are in the redshift
@@ -45,6 +45,8 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
         Overwrite the BAL catalog if it exists? (default is True)
     verbose : bool, optional
         Provide verbose output? (default is False)
+    release : string, optional
+        Specifies the release that the catalog comes from. (default if None)
 
     Returns
     -------
