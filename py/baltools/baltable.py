@@ -96,7 +96,8 @@ def initbaltab_desi(specdata, zdata, outputfile, overwrite=False, release=None):
         redshift data for qsos to search
     outputfile : fitsfile
         name to use for output BAL catalog file
-    release 
+    release : string
+        name of the data release that data comes from
 
     Returns
     -------
@@ -113,6 +114,9 @@ def initbaltab_desi(specdata, zdata, outputfile, overwrite=False, release=None):
     col0 = fits.Column(name='TARGETID', format='K', array=specdata['TARGETID'])
     col1 = fits.Column(name='TARGET_RA', format='E', array=specdata['TARGET_RA'])
     col2 = fits.Column(name='TARGET_DEC', format='E', array=specdata['TARGET_DEC'])
+    if release == 'daily':
+        col3 = fits.Column(name='LAST_NIGHT', format='K', array=specdata['LAST_NIGHT'])
+    E
     col3 = fits.Column(name='NIGHT', format='K', array=specdata['NIGHT'])
     col4 = fits.Column(name='EXPID', format='K', array=specdata['EXPID'])
     if 'MJD' in specdata.colnames :
