@@ -22,6 +22,7 @@ from collections import defaultdict
 import desispec.io
 from desispec.coaddition import coadd_cameras
 
+sys.path.append('/global/homes/s/simonmf/baltools/py')
 import baltools
 from baltools import balconfig as bc
 from baltools import plotter, fitbal, baltable
@@ -64,15 +65,17 @@ args  = parser.parse_args()
 
 if debug: 
     args.verbose=True
+    
+release = args.specprod
 
 # Root directory for input data: 
-dataroot = os.path.join(os.getenv("DESI_SPECTRO_REDUX"), args.specprod, "tiles")
+dataroot = os.path.join(os.getenv("DESI_SPECTRO_REDUX"), release, "tiles")
 if not os.path.isdir(dataroot): 
     print("Error: did not find root directory ", dataroot)
     exit(1)
-
+    
 # Root directory for output catalogs: 
-outroot = os.path.join(args.outdir, args.specprod, "tiles")
+outroot = os.path.join(args.outdir, release, "tiles")
 pmmkdir(outroot)
 
 # Determine which tile(s) to process
