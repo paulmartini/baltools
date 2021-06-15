@@ -130,7 +130,7 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, r
 
 
     # Initialize the BAL table with all quasars in 'qsos'
-    baltable.initbaltab_desi(fm[qsos], zs[zqsos], balfilename, overwrite=overwrite)
+    baltable.initbaltab_desi(fm[qsos], zs[zqsos], balfilename, overwrite=overwrite, release=release)
 
     balhdu = fits.open(balfilename) 
 
