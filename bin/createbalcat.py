@@ -122,10 +122,14 @@ for i in range(len(qtab)):
         if not os.path.isfile(baltablename):
             print("Warning: BAL catalog for TARGETID = ", targetid, "not found: ", baltablename)
         baltab = Table.read(baltablename)
-        bindx = np.where(baltab['TARGETID'] == targetid)[0][0]
-        baltab.remove_columns(['TARGETID', 'TARGET_RA', 'TARGET_DEC', 
-            'Z', 'ZERR', 'ZWARN', 'TILEID'])
-        newrow = hstack([qtab[i], baltab[bindx]])
+        if targetid in baltab['TARGETID']:
+            bindx = np.where(baltab['TARGETID'] == targetid)[0][0]
+            baltab.remove_columns(['TARGETID', 'TARGET_RA', 'TARGET_DEC', 
+               'Z', 'ZERR', 'ZWARN', 'TILEID'])
+            newrow = hstack([qtab[i], baltab[bindx]])
+        else: 
+            newrow = hstack([qtab[i], emptybal])
+            newrow['BAL_PROB'] = -1.
         if first:
             outtab = newrow
             first = False
