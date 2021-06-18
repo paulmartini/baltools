@@ -27,6 +27,7 @@ import fitsio
 import desispec.io
 from desispec.coaddition import coadd_cameras
 
+sys.path.append('/global/homes/s/simonmf/baltools/py')
 import baltools
 from baltools import balconfig as bc
 from baltools import plotter, fitbal, baltable
@@ -94,16 +95,20 @@ first = True
 for i in range(len(qtab)):
     if i == 0: 
         # Create empty BAL row for non-BALs based on a known, non-BAL
-        tileid = '68002'
-        night = '20200315'
-        sp = '7'
-        baltablename = os.path.join(balroot, tileid, night, "baltable-"+sp+"-"+tileid+"-"+night+".fits")
-        targetid = 35185977857147541# Known non-BAL
+        #tileid = '68002'
+        tileid = '1000'
+        #night = '20200315'
+        night = '20210517'
+        #sp = '7'
+        sp = '0'
+        baltablename = os.path.join(balroot, tileid, night, "baltable-"+sp+"-"+tileid+"-"+"thru"+night+".fits")
+        #targetid = 35185977857147541# Known non-BAL
+        targetid = 39627752483062578
         baltab = Table.read(baltablename)
         bindx = np.where(baltab['TARGETID'] == targetid)[0][0]
         emptybal = baltab.copy()
         emptybal.remove_columns(['TARGETID', 'TARGET_RA', 'TARGET_DEC',
-            'Z', 'ZERR', 'ZWARN', 'NIGHT', 'EXPID', 'MJD', 'TILEID'])
+            'Z', 'ZERR', 'ZWARN', 'TILEID'])
         emptybal = emptybal[bindx]
         emptybal['BAL_PROB'] = -1.
     zspec = qtab['Z'][i]
@@ -113,13 +118,13 @@ for i in range(len(qtab)):
         tileid = str(qtab['TILEID'][i])
         night = str(qtab['NIGHT'][i])
         sp = str(qtab['PETAL_LOC'][i])
-        baltablename = os.path.join(balroot, tileid, night, "baltable-"+sp+"-"+tileid+"-"+night+".fits")
+        baltablename = os.path.join(balroot, tileid, night, "baltable-"+sp+"-"+tileid+"-"+"thru"+night+".fits")
         if not os.path.isfile(baltablename):
             print("Warning: BAL catalog for TARGETID = ", targetid, "not found: ", baltablename)
         baltab = Table.read(baltablename)
         bindx = np.where(baltab['TARGETID'] == targetid)[0][0]
         baltab.remove_columns(['TARGETID', 'TARGET_RA', 'TARGET_DEC', 
-            'Z', 'ZERR', 'ZWARN', 'NIGHT', 'EXPID', 'MJD', 'TILEID'])
+            'Z', 'ZERR', 'ZWARN', 'TILEID'])
         newrow = hstack([qtab[i], baltab[bindx]])
         if first:
             outtab = newrow
