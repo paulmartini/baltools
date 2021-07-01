@@ -135,8 +135,7 @@ def inittab(qsocatpath, outtab):
     
     return balcolnames 
 
-
-'''def popqsocat(cattab, rootbaldir, targetid, colnames, overwrite=False, verbose=False):'''    
+  
 def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=False):
     '''
     Write BAL information to QSO catalogue table with BAL information.
@@ -147,8 +146,6 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
         catalogue that BAL information is to be added to.
     rootbaldir : str
         path to root directory containing bal tables
-    ###targetid : np.int64
-        specific object 'TARGETID' which BAL info is being populated for.###
     cindx : int
         index of targetid in qso catalogue        
     colnames : list, strings
@@ -176,7 +173,6 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
     
     # Indices of objects in BAL info catalogue and QSO catalogue 
     # are not necessarily the same.
-    '''cindx = np.where(cathdu[1].data['TARGETID'] == targetid)[0][0]'''
     targetid = cathdu[1].data['TARGETID'][cindx]
     
     tile  = str(cathdu[1].data['TILEID'][cindx])
@@ -185,6 +181,7 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
     night = str(cathdu[1].data['LAST_NIGHT'][cindx])
     spec  = str(cathdu[1].data['PETAL_LOC'][cindx])
     
+    # Find bal table for specific object, open corresponding fits file
     baltabpath = os.path.join(rootbaldir, tile, night, "baltable-{}-{}-thru{}.fits".format(spec, tile, night))
     balhdu = fits.open(baltabpath)
 
@@ -192,7 +189,7 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
             print("BAL information for target ", str(targetid), " being read from ", str(baltabpath))
     
     # IndexError may imply that the target is in the QSO cat but not in the BAL cat. 
-    # Below handles this error.
+    # Below populated empty bal columns and adds bitmasks for classifications.
     if targetid in balhdu[1].data['TARGETID']: 
         bindx = np.where(balhdu[1].data['TARGETID'] == targetid)[0][0]
         
@@ -211,7 +208,7 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
     # NOTE: Add reference to zbest file for object to check whether object is QSO and that is why
     # it is not in redshift range, or if it is simply not in the catalogue.
     
-    else:
+    else: # if not found in bal table for any reason
         if verbose:
             print("Target ",  str(targetid), " not found in bal tables. Information not added")
         cathdu[1].data['BAL_PROB'][cindx] = -1     
@@ -234,6 +231,7 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
             print("Target ", str(targetid), " has significant difference in redshifts between BAL table and qso cat.") 
         cathdu[1].data['BALMASK'][cindx] += 4 #Indicates object is not in baltabs for another reason.
         
+    # Keep track of number of objects ran
     print(cindx)
     #balhdu.close()
     #cathdu.close()
