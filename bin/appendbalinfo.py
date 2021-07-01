@@ -8,7 +8,7 @@ import argparse
 sys.path.append("/global/homes/s/simonmf/baltools/py")
 from baltools import balconfig as bc
 from baltools import fitbal
-from baltools import initcreate as ic
+from baltools import popqsotab as pt
 
 def pmmkdir(direct): 
     if not os.path.isdir(direct):
@@ -66,20 +66,19 @@ pmmkdir(outdir)
 outpath = os.path.join(outdir, filename)
 # Adds empty BAL cols to qso cat and writes to outpath.
 # Stores return value (BAL card names) in cols
-cols = ic.inittab(qsocat, outpath)
+cols = pt.inittab(qsocat, outpath)
 # Want to manually set this to -1 to show that it is not populated
 cols.remove('BAL_PROB')
 
 cathdu    = fits.open(qsocat)
-'''targetids = cathdu[1].data['TARGETID']'''
 lencat = len(cathdu[1].data['TARGETID'])
 
-'''for target in targetids:'''
 for catindex in range(lencat):
-    '''ic.popqsocat(outpath, baldir, target, cols, overwrite=args.clobber, verbose=args.verbose)'''
-    ic.popqsocat(outpath, baldir, catindex, cols, overwrite=args.clobber, verbose=args.verbose)
+    pt.addbalinfo(outpath, baldir, catindex, cols, overwrite=args.clobber, verbose=args.verbose)
+    
+    target = str(cathdu[1].data['TARGETID'][catindex])
     
     if args.verbose:
-        print(("Target ", str(cathdu[1].data['TARGETID'][catindex]), " complete."))
+        print(("Target ", target, " complete."))
     
     
