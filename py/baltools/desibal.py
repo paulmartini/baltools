@@ -24,6 +24,7 @@ from collections import defaultdict
 from baltools import fitbal
 from baltools import balconfig as bc
 from baltools import baltable
+import getpass
 
 
 
@@ -108,7 +109,7 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, r
     # Identify the spectra classified as quasars based on zs and within 
     # the nominal redshift range for BALs
     # BAL_ZMIN = 1.57
-    # BAL_ZMAX = 5.6
+    # BAL_ZMAX = 5.0
     zmask = zs['Z'] > bc.BAL_ZMIN
     zmask = zmask*(zs['Z'] < bc.BAL_ZMAX)
     
@@ -157,6 +158,6 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, r
         print("Wrote BAL catalog {0}".format(balfilename))
 
     balhdu.writeto(balfilename, overwrite=True)
-    lastupdate = "Last updated {0} UT by {1}".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+    lastupdate = "Last updated {0} UT by {1}".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), getpass.getuser())
     fits.setval(balfilename, 'HISTORY', value=lastupdate, ext=1)
 
