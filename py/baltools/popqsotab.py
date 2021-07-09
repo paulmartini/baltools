@@ -40,7 +40,7 @@ def inittab(qsocatpath, outtab):
     Returns
     -------
     colnames : list
-        card names in relating to BALs
+        card names relating to BALs
     
     '''
     
@@ -101,12 +101,12 @@ def inittab(qsocatpath, outtab):
     col29 = fits.Column(name='POSMIN_SIIV_450', format='17E', array=zfloat_aicol)
     col30 = fits.Column(name='FMIN_SIIV_450', format='17E', array=zfloat_aicol)
     
-   # Seperate column not populated in runbalfinder which serves as a flag
+   # Seperate column not populated in runbalfinder which serves as a bitmask
     col31 = fits.Column(name='BALMASK', format='E', array=zfloat_col)
     
     
-    #Columns relating to BAL information
-    BALcols = fits.ColDefs([col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19, col20, col21, col22,           col23, col24, col25, col26, col27, col28, col29, col30])
+    #Columns relating to BAL information from runbalfinder
+    BALcols = fits.ColDefs([col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19, col20,         col21, col22, col23, col24, col25, col26, col27, col28, col29, col30])
     
     #Columns already contained in QSO catalogue
     catcols = cathdu[1].columns
@@ -127,10 +127,9 @@ def inittab(qsocatpath, outtab):
         cathdu.writeto(outtab)
     ###FIXME### Make so that if overwrite is true, the catalogue is completely overwritten with new information.
     except OSError:
-        print("File ", outtab, " already exists. Choose another name")
+        print("File ", outtab, " already exists.")
+        return balcolnames
         
-        
-    
     print("Empty BAL columns added to input QSO catalogue at ", str(qsocatpath), " and written to ", str(outtab), ".")
     
     return balcolnames 
@@ -142,6 +141,7 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
     
     Parameters
     ----------
+    
     cattab : fits file
         catalogue that BAL information is to be added to.
     rootbaldir : str
@@ -161,11 +161,12 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
     
     
     Bitmask definitions
+    -------------------
 
-0       Successfully ran balfinder 
-1       Not found in a baltable
-2       Out of the redshift range to identify BALs
-4       Redshift difference between QSO catalog and baltable
+    0       Successfully ran balfinder 
+    1       Not found in a baltable
+    2       Out of the redshift range to identify BALs
+    4       Redshift difference between QSO catalog and baltable
 
     '''
     
@@ -181,30 +182,35 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
     night = str(cathdu[1].data['LAST_NIGHT'][cindx])
     spec  = str(cathdu[1].data['PETAL_LOC'][cindx])
     
+    if cathdu[1].data['BAL_PROB'][cindx] == -1 and not overwrite:
+        print("BAL information already exists for targetid ", str(targetid), " and overwrite == False. Moving to next target.")
+        print(cindx)
+        return
+    
     # Find bal table for specific object, open corresponding fits file
     baltabpath = os.path.join(rootbaldir, tile, night, "baltable-{}-{}-thru{}.fits".format(spec, tile, night))
     balhdu = fits.open(baltabpath)
 
     if verbose:
             print("BAL information for target ", str(targetid), " being read from ", str(baltabpath))
+            
+    bindx  = 0
+    intabs = False
     
     # IndexError may imply that the target is in the QSO cat but not in the BAL cat. 
     # Below populated empty bal columns and adds bitmasks for classifications.
     if targetid in balhdu[1].data['TARGETID']: 
+        intabs = True
         bindx = np.where(balhdu[1].data['TARGETID'] == targetid)[0][0]
-        
-        if cathdu[1].data['BAL_PROB'][cindx] == -1 and not overwrite:
-            print("BAL information already exists for targetid ", str(targetid), " and overwrite == False. Moving to next target.")
-            
-        else:
             # Read in BAL information from BAL table, populate QSO catalogue with this info.
-            for colname in colnames:
-                cathdu[1].data[colname][cindx] = balhdu[1].data[colname][bindx]
+        for colname in colnames:
+            cathdu[1].data[colname][cindx] = balhdu[1].data[colname][bindx]
 
-                # Indicates that BAL data was added to the catalogue, but BAL_PROB is still an unpopulated field.
-                cathdu[1].data['BAL_PROB'][cindx] = -1 
-                cathdu[1].data['BALMASK'][cindx]  = 0 # Indicates object is in baltable and in redshift range 
+            # Indicates that BAL data was added to the catalogue, but BAL_PROB is still an unpopulated field.
+            cathdu[1].data['BAL_PROB'][cindx] = -1 
+            cathdu[1].data['BALMASK'][cindx]  = 0 # Indicates object is in baltable and in redshift range 
 
+                
     # NOTE: Add reference to zbest file for object to check whether object is QSO and that is why
     # it is not in redshift range, or if it is simply not in the catalogue.
     
@@ -212,7 +218,7 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
         if verbose:
             print("Target ",  str(targetid), " not found in bal tables. Information not added")
         cathdu[1].data['BAL_PROB'][cindx] = -1     
-        cathdu[1].data['BALPROB'][cindx]  = 1
+        cathdu[1].data['BALMASK'][cindx]  = 1
     
     # Checks if z of object in catdata is outside of z range for runbalfinder for bit mask
     if cathdu[1].data['Z'][cindx] > bc.BAL_ZMAX or cathdu[1].data['Z'][cindx] < bc.BAL_ZMIN:
@@ -224,12 +230,14 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
     
     ztol = 0.001 # Tolarance for differences in z between catalogues
     zc   = cathdu[1].data['Z'][cindx] # z from qso catalogue for object
-    zb   = balhdu[1].data['Z'][bindx] # z from bal table for object
-    dz   = abs(zc - zb) 
-    if dz > ztol:
-        if verbose:
-            print("Target ", str(targetid), " has significant difference in redshifts between BAL table and qso cat.") 
-        cathdu[1].data['BALMASK'][cindx] += 4 #Indicates object is not in baltabs for another reason.
+    if intabs: # If the object is not in bal tables, the following lines don't even make sense to do.
+        zb   = balhdu[1].data['Z'][bindx] # z from bal table for object
+        dz   = abs(zc - zb) 
+        if intabs and dz > ztol:
+            if verbose:
+                print("Target ", str(targetid), " has significant difference in redshifts between BAL table and qso cat.") 
+                print("Redshift in BAL table is ", zb, "while redshift in catalogue is ", zc)
+            cathdu[1].data['BALMASK'][cindx] += 4 # Indicates large z error between catalogues
         
     # Keep track of number of objects ran
     print(cindx)
