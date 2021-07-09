@@ -55,11 +55,15 @@ parser.add_argument('-s', '--specprod', type = str, default = 'andes', required 
 parser.add_argument('-o','--outdir', type = str, default = None, required = True,
                     help = 'Root directory for output files')
 
+parser.add_argument('-e', '--dirextension', type = str, default = None, required = False,
+                   help = 'Name of directory for output files')
+
 parser.add_argument('-c','--clobber', type=bool, default=False, required=False,
                     help='Clobber (overwrite) BAL catalog if it already exists?')
 
 parser.add_argument('-v','--verbose', type = bool, default = False, required = False,
                     help = 'Provide verbose output?')
+
 
 args  = parser.parse_args()
 
@@ -70,13 +74,17 @@ release = args.specprod
 
 # Root directory for input data: 
 dataroot = os.path.join(os.getenv("DESI_SPECTRO_REDUX"), release, "tiles")
+if release == 'daily':
+    dataroot = os.path.join(dataroot, 'cumulative')
 if not os.path.isdir(dataroot): 
     print("Error: did not find root directory ", dataroot)
     exit(1)
     
 # Root directory for output catalogs: 
-outroot = os.path.join(args.outdir, release, "tiles")
+dirname = release + args.dirextension 
+outroot = os.path.join(args.outdir, dirname, "tiles")
 pmmkdir(outroot)
+
 
 # Determine which tile(s) to process
 
@@ -119,5 +127,5 @@ for tile in inputtiles:
                 print("Coadd file: ", coaddfile)
 
             if not os.path.isfile(balfilename) or args.clobber: 
-                db.desibalfinder(coaddfile, altbaldir=outdatedir, overwrite=args.clobber, verbose=True)
+                db.desibalfinder(coaddfile, altbaldir=outdatedir, overwrite=args.clobber, verbose=True, release=release)
 
