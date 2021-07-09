@@ -1,3 +1,16 @@
+"""
+
+baltools.appendbalinfo
+======================
+
+Utilizes functinos from popqsotab.py to add empty BAL columns to existing
+QSO catalogue and add information from baltables to new catalogue.
+runbalfinder.py tables
+
+2021 Original code by Simon Filbert
+
+"""
+
 import os
 import sys
 import numpy as np
@@ -5,7 +18,6 @@ from astropy.io import fits
 
 import argparse
 
-sys.path.append("/global/homes/s/simonmf/baltools/py")
 from baltools import balconfig as bc
 from baltools import fitbal
 from baltools import popqsotab as pt
@@ -13,6 +25,7 @@ from baltools import popqsotab as pt
 def pmmkdir(direct): 
     if not os.path.isdir(direct):
         try:
+            print(direct, "not found. Making new directory.")
             os.makedirs(direct)
         except PermissionError:
             print("Error: no permission to make directory ", direct)
@@ -23,10 +36,10 @@ os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Update existing QSO catalogue with BAL information""")
 
-parser.add_argument('-q', '--qsocat', type = str, default = ".", required = True,
+parser.add_argument('-q', '--qsocat', type = str, default = None, required = True,
                     help = 'Input QSO catalogue for which information is to be added to')
 
-parser.add_argument('-b','--baldir', type=str, default=".", required=False,
+parser.add_argument('-b','--baldir', type=str, default = None, required=True,
                     help='Path to directory structure with individual BAL catalogs')
 
 parser.add_argument('-o','--outdir', type = str, default = None, required = True,
@@ -49,19 +62,14 @@ filename = args.filename
 qsocat   = args.qsocat
 baldir   = args.baldir
 
-if qsocat == ".":
-    print("Input QSO catalogue path is required. Exiting program.")
-    exit(1)
+
 if not os.path.isfile(qsocat):
     print("Error: cannot find ", qsocat)
-    exit(1)
-
-if baldir == ".":
-    print("Root BAL directory path is required. Exiting program.")
     exit(1)
     
 # Checks whether outdir exists. If it does not, makes it if permitted.
 pmmkdir(outdir)
+
     
 outpath = os.path.join(outdir, filename)
 # Adds empty BAL cols to qso cat and writes to outpath.
