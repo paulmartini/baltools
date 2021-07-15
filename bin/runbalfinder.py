@@ -88,6 +88,8 @@ if not os.path.isdir(dataroot):
 outroot = os.path.join(args.outdir, dirname, "tiles")
 pmmkdir(outroot)
 
+# List of tiles that caused issues for by hand rerun.
+issuetiles = []
 
 # Determine which tile(s) to process
 
@@ -130,5 +132,12 @@ for tile in inputtiles:
                 print("Coadd file: ", coaddfile)
 
             if not os.path.isfile(balfilename) or args.clobber: 
-                db.desibalfinder(coaddfile, altbaldir=outdatedir, overwrite=args.clobber, verbose=True, release=release)
-
+                try:
+                    db.desibalfinder(coaddfile, altbaldir=outdatedir, overwrite=args.clobber, verbose=True, release=release)
+                except:
+                    print("An error occured at tile {}. Adding tile to issuetiles list.".format(tile))
+                    issuetiles.append(tile)
+                    
+print("Errors occured at the tiles: ")
+for issuetile in issuetiles:
+    print(issuetile, end=" "),
