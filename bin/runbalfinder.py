@@ -22,7 +22,6 @@ from collections import defaultdict
 import desispec.io
 from desispec.coaddition import coadd_cameras
 
-sys.path.append('/global/homes/s/simonmf/baltools/py')
 import baltools
 from baltools import balconfig as bc
 from baltools import plotter, fitbal, baltable
@@ -55,7 +54,7 @@ parser.add_argument('-s', '--specprod', type = str, default = 'andes', required 
 parser.add_argument('-o','--outdir', type = str, default = None, required = True,
                     help = 'Root directory for output files')
 
-parser.add_argument('-e', '--dirextension', type = str, default = None, required = False,
+parser.add_argument('-n', '--dirname', type = str, default = None, required = False,
                    help = 'Name of directory for output files')
 
 parser.add_argument('-c','--clobber', type=bool, default=False, required=False,
@@ -72,6 +71,11 @@ if debug:
     
 release = args.specprod
 
+if args.dirname == None:
+    dirname = release
+else:
+    dirname = args.dirname
+
 # Root directory for input data: 
 dataroot = os.path.join(os.getenv("DESI_SPECTRO_REDUX"), release, "tiles")
 if release == 'daily':
@@ -81,7 +85,6 @@ if not os.path.isdir(dataroot):
     exit(1)
     
 # Root directory for output catalogs: 
-dirname = release + args.dirextension 
 outroot = os.path.join(args.outdir, dirname, "tiles")
 pmmkdir(outroot)
 
