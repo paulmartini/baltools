@@ -9,8 +9,9 @@ runbalfinder.py tables
 
 2021 Original code by Simon Filbert
 
-inittab()    : add empty columns for BAL info to existing QSO catalogue
-popqsocat() : populate empty columns with BAL information 
+concatbaltabs()  : join  bal tables from runbalfinder.py into one fits file
+inittab()        : add empty columns for BAL info to existing QSO catalogue
+popqsocat()      : populate empty columns with BAL information 
 
 """
 
@@ -19,10 +20,62 @@ import os
 import sys
 import numpy as np
 from astropy.io import fits
+from astropy.tables import Table, vstack
 
 sys.path.append("/global/homes/s/simonmf/baltools/py")
 from baltools import balconfig as bc
 from baltools import fitbal
+
+
+def concatbaltabs(rootbaldir, outtab):
+    '''
+    Stack rows from seperate bal tables to create one
+    fits file with all objects in contained in rootbaldir.
+
+    Parameters
+    ----------
+    rootbaldir : str
+        path to root directory containing bal tables
+       
+    outtab  : fits file
+        where to write resulting catalogue to.
+
+    Returns
+    -------
+    None
+    
+    '''
+    
+    tiles = os.listdir(rootbaldir)
+    
+    baltabpaths = []
+
+    for tile in tiles:
+        tilepath = os.path.join(rootbaldir, tile)
+        nights = os.listdir(tilepath)
+        for night in nights:
+            nightpath = os.path.join(tilepath, night)
+
+            fitsfiles = os.listdir(nightpath)
+            for fitsfile in fitsfiles:
+                specificfilepath = os.path.join(nightpath, fitsfile)
+                baltabpaths.append(specificfilepath)
+                
+    baltables = []
+    for baltabpath in baltabpaths:
+        baltab = Table.read(baltabpath)
+        if len(baltab) > 0:
+            tables.append(baltab)
+
+    concatbaltab = vstack(baltables)
+    
+    try:
+        concatbaltab.write(outtab , format = 'fits')
+    except OSError:
+        print("File ", outtab, " already exists.")
+        
+    print("BAL tables located under {} stacked into new table. BAL information table was written to {}.".format(rootbaldir, outtab))
+        
 
 
 def inittab(qsocatpath, outtab):
@@ -106,7 +159,7 @@ def inittab(qsocatpath, outtab):
     
     
     #Columns relating to BAL information from runbalfinder
-    BALcols = fits.ColDefs([col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19, col20,         col21, col22, col23, col24, col25, col26, col27, col28, col29, col30])
+    BALcols = fits.ColDefs([col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19, col20, col21, col22,           col23, col24, col25, col26, col27, col28, col29, col30])
     
     #Columns already contained in QSO catalogue
     catcols = cathdu[1].columns
@@ -125,7 +178,6 @@ def inittab(qsocatpath, outtab):
     
     try:
         cathdu.writeto(outtab)
-    ###FIXME### Make so that if overwrite is true, the catalogue is completely overwritten with new information.
     except OSError:
         print("File ", outtab, " already exists.")
         return balcolnames
@@ -151,9 +203,9 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
     colnames : list, strings
         list of columns in fits file which are to contain BAL info.
     overwrite : bool
-        overwrite current table (if exists)?
+        overwrite current table (if exists)? (default is False)
     verbose : bool
-        provide verbose output?
+        provide verbose output? (default is False)
     
     Returns
     -------
@@ -175,12 +227,12 @@ def addbalinfo(cattab, rootbaldir, cindx, colnames, overwrite=False, verbose=Fal
     # Indices of objects in BAL info catalogue and QSO catalogue 
     # are not necessarily the same.
     targetid = cathdu[1].data['TARGETID'][cindx]
-    
-    tile  = str(cathdu[1].data['TILEID'][cindx])
+   
+    tile  = str(cathdu[1].data['TILE'][cindx])
     # runbalfinder.py uses last_night card to specify observation night
     # as of (last check) 06/24/2021
     night = str(cathdu[1].data['LAST_NIGHT'][cindx])
-    spec  = str(cathdu[1].data['PETAL_LOC'][cindx])
+    spec  = str(cathdu[1].data['PETAL'][cindx])
     
     if cathdu[1].data['BAL_PROB'][cindx] == -1 and not overwrite:
         print("BAL information already exists for targetid ", str(targetid), " and overwrite == False. Moving to next target.")
