@@ -51,14 +51,20 @@ parser.add_argument('-d', '--date', nargs='*', default = None, required = False,
 parser.add_argument('-s', '--specprod', type = str, default = 'andes', required = False,
                     help = 'Specprod (data release subdirectory, default is andes)')
 
-parser.add_argument('-q', '--qsocat', type = str, default = None, required = False,
-                   help = 'QSO cat which tiles will be taken from')
-
 parser.add_argument('-o','--outdir', type = str, default = None, required = True,
                     help = 'Root directory for output files')
+'''
+# THE FOLLOWING 3 OPTIONS ARE STILL IN PROGRESS #
+
+parser.add_argument('-q', '--qsocat', type = str, default = None, required = False,
+                   help = 'Input QSO catalogue for tiles or spectypes')
+
+parser.add_argument('--use_cat_tiles', type = bool, defualt=False, required=False,
+                   help = 'Run code on all tiles in the catalogue?') 
 
 parser.add_argument('--use_cat_spectypes', type = bool, default=False, required=False,
                     help = 'Use spectypes from catalogue instead of from zbest')
+'''
 
 parser.add_argument('-c','--clobber', type = bool, default=False, required=False,
                     help = 'Clobber (overwrite) BAL catalog if it already exists?')
