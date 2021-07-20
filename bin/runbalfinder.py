@@ -94,6 +94,7 @@ pmmkdir(outroot)
 
 # List of tiles that caused issues for by hand rerun.
 issuetiles = []
+errortypes = []
 
 # Determine which tile(s) to process
 
@@ -140,8 +141,10 @@ for tile in inputtiles:
                     db.desibalfinder(coaddfile, altbaldir=outdatedir, overwrite=args.clobber, verbose=True, release=release)
                 except:
                     print("An error occured at tile {}. Adding tile to issuetiles list.".format(tile))
+                    errorytpe = sys.exc_info()[0]
                     issuetiles.append(tile)
+                    errortypes.append(errortype)
                     
-print("Errors occured at the tiles: ")
-for issuetile in issuetiles:
-    print(issuetile, end=" "),
+print("Tiles with errors and error types: ")
+for i in range(len(issuetiles)):
+    print("{} : {}".format(issuetiles[i], errortypes[i]))
