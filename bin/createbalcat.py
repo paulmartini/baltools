@@ -27,13 +27,12 @@ import fitsio
 import desispec.io
 from desispec.coaddition import coadd_cameras
 
-sys.path.append('/global/homes/s/simonmf/baltools/py')
 import baltools
 from baltools import balconfig as bc
 from baltools import plotter, fitbal, baltable
 from baltools import desibal as db
 
-debug = True
+debug = False
 
 os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux/'
 
@@ -142,6 +141,9 @@ for i in range(len(qtab)):
             first = False
         else: 
             outtab = vstack([outtab, newrow])
+    #if i % 1000 == 0:
+        #outtab.write(balcatname, format='fits', overwrite=True)
+        #print('Updated BAL catalog. Wrote to ', balcatname)
 
 
 outtab.write(balcatname, format='fits', overwrite=True)
