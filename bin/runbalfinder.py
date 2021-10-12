@@ -53,27 +53,48 @@ parser.add_argument('-s', '--specprod', type = str, default = 'andes', required 
 
 parser.add_argument('-o','--outdir', type = str, default = None, required = True,
                     help = 'Root directory for output files')
+'''
+# THE FOLLOWING 3 OPTIONS ARE STILL IN PROGRESS #
 
-parser.add_argument('-c','--clobber', type=bool, default=False, required=False,
-                    help='Clobber (overwrite) BAL catalog if it already exists?')
+parser.add_argument('-q', '--qsocat', type = str, default = None, required = False,
+                   help = 'Input QSO catalogue for tiles or spectypes')
+
+parser.add_argument('--use_cat_tiles', type = bool, defualt=False, required=False,
+                   help = 'Run code on all tiles in the catalogue?') 
+
+parser.add_argument('--use_cat_spectypes', type = bool, default=False, required=False,
+                    help = 'Use spectypes from catalogue instead of from zbest')
+'''
+
+parser.add_argument('-c','--clobber', type = bool, default=False, required=False,
+                    help = 'Clobber (overwrite) BAL catalog if it already exists?')
 
 parser.add_argument('-v','--verbose', type = bool, default = False, required = False,
                     help = 'Provide verbose output?')
+
 
 args  = parser.parse_args()
 
 if debug: 
     args.verbose=True
+    
+release = args.specprod
 
 # Root directory for input data: 
-dataroot = os.path.join(os.getenv("DESI_SPECTRO_REDUX"), args.specprod, "tiles")
+dataroot = os.path.join(os.getenv("DESI_SPECTRO_REDUX"), release, "tiles")
+if release == 'daily':
+    dataroot = os.path.join(dataroot, 'cumulative')
 if not os.path.isdir(dataroot): 
     print("Error: did not find root directory ", dataroot)
     exit(1)
-
+    
 # Root directory for output catalogs: 
-outroot = os.path.join(args.outdir, args.specprod, "tiles")
+outroot = os.path.join(args.outdir, release, "tiles")
 pmmkdir(outroot)
+
+# List of tiles that caused issues for by hand rerun.
+issuetiles = []
+errortypes = []
 
 # Determine which tile(s) to process
 
@@ -116,5 +137,14 @@ for tile in inputtiles:
                 print("Coadd file: ", coaddfile)
 
             if not os.path.isfile(balfilename) or args.clobber: 
-                db.desibalfinder(coaddfile, altbaldir=outdatedir, overwrite=args.clobber, verbose=True)
-
+                try:
+                    db.desibalfinder(coaddfile, altbaldir=outdatedir, overwrite=args.clobber, verbose=True, release=release)
+                except:
+                    print("An error occured at tile {}. Adding tile to issuetiles list.".format(tile))
+                    errorytpe = sys.exc_info()[0]
+                    issuetiles.append(tile)
+                    errortypes.append(errortype)
+                    
+print("Tiles with errors and error types: ")
+for i in range(len(issuetiles)):
+    print("{} : {}".format(issuetiles[i], errortypes[i]))

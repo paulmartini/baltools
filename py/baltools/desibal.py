@@ -24,10 +24,11 @@ from collections import defaultdict
 from baltools import fitbal
 from baltools import balconfig as bc
 from baltools import baltable
+import getpass
 
 
 
-def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False): 
+def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, release=None): 
     '''
     Find BALs in DESI quasars
     1. Identify all objects classified as quasars that are in the redshift
@@ -45,6 +46,8 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
         Overwrite the BAL catalog if it exists? (default is True)
     verbose : bool, optional
         Provide verbose output? (default is False)
+    release : string, optional
+        Specifies the release that the catalog comes from. (default if None)
 
     Returns
     -------
@@ -106,7 +109,7 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
     # Identify the spectra classified as quasars based on zs and within 
     # the nominal redshift range for BALs
     # BAL_ZMIN = 1.57
-    # BAL_ZMAX = 5.6
+    # BAL_ZMAX = 5.0
     zmask = zs['Z'] > bc.BAL_ZMIN
     zmask = zmask*(zs['Z'] < bc.BAL_ZMAX)
     
@@ -128,7 +131,7 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
 
 
     # Initialize the BAL table with all quasars in 'qsos'
-    baltable.initbaltab_desi(fm[qsos], zs[zqsos], balfilename, overwrite=overwrite)
+    baltable.initbaltab_desi(fm[qsos], zs[zqsos], balfilename, overwrite=overwrite, release=release)
 
     balhdu = fits.open(balfilename) 
 
@@ -155,6 +158,6 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False):
         print("Wrote BAL catalog {0}".format(balfilename))
 
     balhdu.writeto(balfilename, overwrite=True)
-    lastupdate = "Last updated {0} UT by {1}".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+    lastupdate = "Last updated {0} UT by {1}".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), getpass.getuser())
     fits.setval(balfilename, 'HISTORY', value=lastupdate, ext=1)
 
