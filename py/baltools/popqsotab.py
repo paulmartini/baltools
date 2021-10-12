@@ -20,7 +20,7 @@ import os
 import sys
 import numpy as np
 from astropy.io import fits
-from astropy.tables import Table, vstack
+from astropy.table import Table, vstack
 
 sys.path.append("/global/homes/s/simonmf/baltools/py")
 from baltools import balconfig as bc
