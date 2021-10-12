@@ -70,32 +70,21 @@ if debug:
     
 
 # Root directory for input data: 
-# Example: /global/cfs/cdirs/desi/spectro/redux/everest/healpix/main/dark/100
 dataroot = os.path.join(os.getenv("DESI_SPECTRO_REDUX"), args.release, "healpix", args.survey, args.moon) 
-#if release == 'daily':
-#    dataroot = os.path.join(dataroot, 'cumulative')
-#if not os.path.isdir(dataroot): 
-#    print("Error: did not find root directory ", dataroot)
-#    exit(1)
     
 # Root directory for output catalogs: 
 outroot = os.path.join(args.outdir, args.release, "healpix", args.survey, args.moon)
 pmmkdir(outroot)
 
-
-# Determine which tile(s) to process
-
+# All possible healpix --
 healpixdirs = glob(dataroot + "/*/*")
-
 healpixels = []  # list of all available healpix
 for healpixdir in healpixdirs:
     healpixels.append(healpixdir[healpixdir.rfind('/')+1::])
 
-print(healpixels) # all possible healpix
 
+# Requested healpix
 inputhealpixels = args.healpix
-
-print(inputhealpixels) # input healpix
 
 # Check that all requested healpix exist
 if inputhealpixels is not None:
