@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from astropy.io import fits
 from glob import glob
 
-from datetime import datetime
+from time import gmtime, strftime
 import argparse
 import fitsio
 from collections import defaultdict
@@ -105,8 +105,10 @@ issuehealpixels = []
 errortypes = []
 
 f = open(outroot + "/" + args.logfile, 'a') 
-updatestr = "Ran this code on {}\n".format(datetime.now().strftime("%d/%m/%Y %H:%M:%S") )
-f.write(updatestr)
+lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+commandline = " ".join(sys.argv)
+f.write(lastupdate)
+f.write(commandline+'\n')
 
 # For each tile in inputtiles, get the list of dates, create output 
 # directories, identify BALs, and create catalogs 
