@@ -28,7 +28,7 @@ import getpass
 
 
 
-def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, release=None): 
+def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, release=None, format='healpix'): 
     '''
     Find BALs in DESI quasars
     1. Identify all objects classified as quasars that are in the redshift
@@ -47,20 +47,27 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, r
     verbose : bool, optional
         Provide verbose output? (default is False)
     release : string, optional
-        Specifies the release that the catalog comes from. (default if None)
+        Specifies the data release (default if None)
+    format : string, optional 
+        Specifies either healpix or tile based (default is healpix)
 
     Returns
     -------
     none
     ''' 
+   
+    zfileroot = 'zbest' 
+    if release == 'everest': 
+        zfileroot = 'redrock' 
+
     # Define some variable names based on the type of input file
     if 'spectra-' in specfilename:
         specshort = specfilename[specfilename.rfind('spectra-'):specfilename.rfind('.fits')]
-        zshort = specshort.replace('spectra', 'zbest')
+        zshort = specshort.replace('spectra', zfilelroot)
         zfilename = specfilename.replace(specshort, zshort)
     elif 'coadd-' in specfilename:
         specshort = specfilename[specfilename.rfind('coadd-'):specfilename.rfind('.fits')]
-        zshort = specshort.replace('coadd', 'zbest')
+        zshort = specshort.replace('coadd', zfileroot)
         zfilename = specfilename.replace(specshort, zshort)
     else:
         print("Error: unable to find redshift file for {}".format(specfilename))
@@ -128,7 +135,6 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, r
     fm = specobj.fibermap
     # Create a list of the indices in specobj on which to run balfinder
     qsos = [index for item in fm["TARGETID"] for index in dd[item] if item in dd]
-
 
     # Initialize the BAL table with all quasars in 'qsos'
     baltable.initbaltab_desi(fm[qsos], zs[zqsos], balfilename, overwrite=overwrite, release=release)

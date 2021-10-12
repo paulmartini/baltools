@@ -114,17 +114,18 @@ def initbaltab_desi(specdata, zdata, outputfile, overwrite=False, release=None):
     col0 = fits.Column(name='TARGETID', format='K', array=specdata['TARGETID'])
     col1 = fits.Column(name='TARGET_RA', format='E', array=specdata['TARGET_RA'])
     col2 = fits.Column(name='TARGET_DEC', format='E', array=specdata['TARGET_DEC'])
-    if release == 'daily':
-        col3 = fits.Column(name='LAST_NIGHT', format='K', array=specdata['LAST_NIGHT'])
-    E
-    col3 = fits.Column(name='NIGHT', format='K', array=specdata['NIGHT'])
-    col4 = fits.Column(name='EXPID', format='K', array=specdata['EXPID'])
-    if 'MJD' in specdata.colnames :
-        col5 = fits.Column(name='MJD', format='E', array=specdata['MJD'])
-    else :
-        col5 = fits.Column(name='MJD', format='E', array=np.empty(NROWS, dtype=float))
-        
-    col6 = fits.Column(name='TILEID', format='k', array=specdata['TILEID'])
+#    if release == 'daily':
+#        col3 = fits.Column(name='LAST_NIGHT', format='K', array=specdata['LAST_NIGHT'])
+#    col4 = fits.Column(name='EXPID', format='K', array=specdata['EXPID'])
+#
+#    else: 
+#        col3 = fits.Column(name='NIGHT', format='K', array=specdata['NIGHT'])
+#    if 'MJD' in specdata.colnames :
+#        col5 = fits.Column(name='MJD', format='E', array=specdata['MJD'])
+#    else :
+#        col5 = fits.Column(name='MJD', format='E', array=np.empty(NROWS, dtype=float))
+#        
+#    col6 = fits.Column(name='TILEID', format='k', array=specdata['TILEID'])
 
     # Columns to copy from the redshift data
     col7 = fits.Column(name='Z', format='E', array=zdata['Z'])
@@ -182,8 +183,9 @@ def initbaltab_desi(specdata, zdata, outputfile, overwrite=False, release=None):
 
     balhead = fits.Header({'SIMPLE': True})
     balhead['EXTNAME'] = "BALCAT"
-    tabhdu = fits.BinTableHDU.from_columns([col0, col1, col2, col3, col4, col5,
-                                            col6, col7, col8, col9, col10, col11, 
+    tabhdu = fits.BinTableHDU.from_columns([col0, col1, col2, 
+#                                            col3, col4, col5, col6, 
+                                            col7, col8, col9, col10, col11, 
                                             col25, col26,
                                             col27, col28, col29, col30, col31,
                                             col32, col33, col34, col35, col36,
