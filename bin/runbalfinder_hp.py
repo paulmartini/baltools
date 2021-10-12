@@ -91,17 +91,22 @@ healpixels = []  # list of all available healpix
 for healpixdir in healpixdirs:
     healpixels.append(healpixdir[healpixdir.rfind('/')+1::])
 
+print(healpixels) # all possible healpix
+
 inputhealpixels = args.healpix
 
+print(inputhealpixels) # input healpix
+
+# Check that all requested healpix exist
 if inputhealpixels is not None:
     for inputhealpixel in inputhealpixels: 
-        assert(inputhealpixel in healpixels), "Healpix {} not available".format(inputhealpixels)
+        assert(inputhealpixel in healpixels), "Healpix {} not available".format(inputhealpixel)
 else:
     inputhealpixels = healpixels
 
-# Create/confirm output tile directories exist
-for inputhealpix in inputhealpixels: 
-    healpixdir = os.path.join(outroot, inputhealpix[:3], inputhealpix) 
+# Create/confirm output healpix directories exist
+for inputhealpixel in inputhealpixels: 
+    healpixdir = os.path.join(outroot, inputhealpixel[:3], inputhealpixel) 
     pmmkdir(healpixdir) 
 
 # For each tile in inputtiles, get the list of dates, create output 
@@ -115,8 +120,8 @@ for healpix in inputhealpixels:
     coaddfilename = "coadd-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
     balfilename = coaddfilename.replace('coadd-', 'baltable-')
 
-    indir = os.path.join(dataroot, inputhealpix[:3], inputhealpix)
-    outdir = os.path.join(outroot, inputhealpix[:3], inputhealpix)
+    indir = os.path.join(dataroot, healpix[:3], healpix)
+    outdir = os.path.join(outroot, healpix[:3], healpix)
 
     coaddfile = os.path.join(indir, coaddfilename) 
     balfile = os.path.join(outdir, balfilename) 
