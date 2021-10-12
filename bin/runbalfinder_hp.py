@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 from astropy.io import fits
 from glob import glob
 
+from datetime import datetime
 import argparse
-
 import fitsio
 from collections import defaultdict
 import desispec.io
@@ -104,6 +104,10 @@ for inputhealpixel in inputhealpixels:
 issuehealpixels = []
 errortypes = []
 
+f = open(outroot + "/" + args.logfile, 'a') 
+updatestr = "Ran this code on {}\n".format(datetime.now().strftime("%d/%m/%Y %H:%M:%S") )
+f.write(updatestr)
+
 # For each tile in inputtiles, get the list of dates, create output 
 # directories, identify BALs, and create catalogs 
 for healpix in inputhealpixels: 
@@ -129,6 +133,9 @@ for healpix in inputhealpixels:
             issuehealpixels.append(healpix)
             errortypes.append(errortype)
 
-print("Healpix with errors and error types: ")
+outstr = "List of healpix with errors and error types: \n"
+f.write(outstr) 
 for i in range(len(issuehealpixels)):
-    print("{} : {}".format(issuehealpixels[i], errortypes[i]))
+    f.write("{} : {}\n".format(issuehealpixels[i], errortypes[i]))
+
+f.close()
