@@ -95,7 +95,7 @@ else:
 
 # Create/confirm output healpix directories exist
 for inputhealpixel in inputhealpixels: 
-    healpixdir = os.path.join(outroot, inputhealpixel[:3], inputhealpixel) 
+    healpixdir = os.path.join(outroot, inputhealpixel[:len(inputhealpix)-2], inputhealpixel) 
     pmmkdir(healpixdir) 
 
 # For each tile in inputtiles, get the list of dates, create output 
@@ -109,8 +109,8 @@ for healpix in inputhealpixels:
     coaddfilename = "coadd-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
     balfilename = coaddfilename.replace('coadd-', 'baltable-')
 
-    indir = os.path.join(dataroot, healpix[:3], healpix)
-    outdir = os.path.join(outroot, healpix[:3], healpix)
+    indir = os.path.join(dataroot, healpix[:len(healpix)-2], healpix)
+    outdir = os.path.join(outroot, healpix[:len(healpix)-2], healpix)
 
     coaddfile = os.path.join(indir, coaddfilename) 
     balfile = os.path.join(outdir, balfilename) 
