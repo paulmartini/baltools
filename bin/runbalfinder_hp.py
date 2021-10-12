@@ -57,6 +57,9 @@ parser.add_argument('-m', '--moon', type = str, default = 'dark', required = Fal
 parser.add_argument('-o','--outdir', type = str, default = None, required = True,
                     help = 'Root directory for output files')
 
+parser.add_argument('-l','--logfile', type = str, default = 'logfile.txt', required = False,
+                    help = 'Name of log file written to outdir, default is logfile.txt')
+
 parser.add_argument('-c','--clobber', type = bool, default=False, required=False,
                     help = 'Clobber (overwrite) BAL catalog if it already exists?')
 
@@ -82,7 +85,6 @@ healpixels = []  # list of all available healpix
 for healpixdir in healpixdirs:
     healpixels.append(healpixdir[healpixdir.rfind('/')+1::])
 
-
 # Requested healpix
 inputhealpixels = args.healpix
 
@@ -95,16 +97,15 @@ else:
 
 # Create/confirm output healpix directories exist
 for inputhealpixel in inputhealpixels: 
-    healpixdir = os.path.join(outroot, inputhealpixel[:len(inputhealpix)-2], inputhealpixel) 
+    healpixdir = os.path.join(outroot, inputhealpixel[:len(inputhealpixel)-2], inputhealpixel) 
     pmmkdir(healpixdir) 
-
-# For each tile in inputtiles, get the list of dates, create output 
-# directories, identify BALs, and create catalogs 
 
 # List of healpix that caused issues for by hand rerun.
 issuehealpixels = []
 errortypes = []
 
+# For each tile in inputtiles, get the list of dates, create output 
+# directories, identify BALs, and create catalogs 
 for healpix in inputhealpixels: 
     coaddfilename = "coadd-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
     balfilename = coaddfilename.replace('coadd-', 'baltable-')
