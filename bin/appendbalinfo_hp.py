@@ -53,7 +53,7 @@ parser.add_argument('-q', '--qsocat', type = str, default = None, required = Tru
 parser.add_argument('-b','--baldir', type=str, default = None, required=True,
                     help='Path to directory structure with individual BAL catalogs')
 
-parser.add_argument('-o','--outcat', type=str, default="qso-balcat.fits", 
+parser.add_argument('-o','--outcatfile', type=str, default="qso-balcat.fits", 
                     required=False, help='Filename of output QSO+BAL catalog')
 
 parser.add_argument('-s', '--survey', type = str, default = 'main', required = False,
@@ -78,7 +78,7 @@ if not os.path.isfile(args.qsocat):
     
     
 # Full path to the output QSO+BAL catalog
-outcat = os.path.join(args.baldir, args.outcat) 
+outcat = os.path.join(args.baldir, args.outcatfile) 
 
 # Add empty BAL cols to qso cat and writes to outcat.
 # Stores return value (BAL card names) in cols
@@ -104,10 +104,12 @@ if args.verbose:
 # /global/cfs/cdirs/desi/users/martini/everest/healpix/sv3/dark/93/9338/baltable-sv3-dark-9338.fits
 for healpix in healpixlist: 
     balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
-    balfile = os.path.join(args.baldir, str(healpix)[:len(str(healpix))-2], str(healpix), balfilename)
+    balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix), balfilename)
     bhdu = fits.open(balfile) 
     bcat = bhdu['BALCAT'].data
-    hmask = healpixels == healpix
+
+    hmask = healpixels == healpix  # mask of everything in qcat in this healpix
+
     if args.verbose: 
         print(healpix, len(str(healpix)), str(healpix)[:len(str(healpix))-2], balfile, os.path.isfile(balfile), np.sum(hmask))
     indxs = hindxs[hmask] # indices in qcat that are in pixel healpix
@@ -116,6 +118,13 @@ for healpix in healpixlist:
         if len(ind) > 0:
             balcopy(qcat[ind[0]], bhdu['BALCAT'].data[i])
             # print(i, targetid, qcat['TARGETID'][ind[0]], qcat['Z'][ind[0]], ind[0], qcat['BALMASK'][ind[0]], qcat['BI_CIV'][ind[0]])
+
+# Apply redshift range mask
+zmask = qcat['Z'] >= bc.BAL_ZMIN
+zmask = zmask*(qcat['Z'] <= bc.BAL_ZMAX)
+zmask = ~zmask # check to True for out of redshift range
+zbit = 2*np.ones(len(zmask), dtype=np.ubyte) # bitmask for out of redshift range
+qcat['BALMASK'][zmask] += zbit[zmask]
 
 qhdu.writeto(outcat, overwrite=True)
 print("Wrote ", outcat) 
