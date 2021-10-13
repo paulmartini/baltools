@@ -112,7 +112,7 @@ def inittab(qsocatpath, outtab):
     zfloat_col = np.zeros([NROWS], dtype=float)
     zint_col = np.zeros([NROWS], dtype=float)
     zneg_col = np.array([-99]*NROWS, dtype=float) # For BAL_PROB
-    zbit_col = np.array(NROWS, dtype=int) # For bit masking in BALMASK
+    zbyte_col = np.ones(NROWS, dtype=np.ubyte) # For bit masking in BALMASK
     zfloat_bicol = np.zeros([NROWS, bc.NBI], dtype=float) # Second dimension is max number of BI troughs
     zfloat_aicol = np.zeros([NROWS, bc.NAI], dtype=float) # Second dimension is max number of AI troughs
 
@@ -155,7 +155,7 @@ def inittab(qsocatpath, outtab):
     col30 = fits.Column(name='FMIN_SIIV_450', format='17E', array=zfloat_aicol)
     
    # Seperate column not populated in runbalfinder which serves as a bitmask
-    col31 = fits.Column(name='BALMASK', format='E', array=zfloat_col)
+    col31 = fits.Column(name='BALMASK', format='B', array=zbyte_col) # default is '1' (not found in baltable)
     
     
     #Columns relating to BAL information from runbalfinder
