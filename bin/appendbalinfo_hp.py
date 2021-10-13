@@ -62,10 +62,10 @@ parser.add_argument('-s', '--survey', type = str, default = 'main', required = F
 parser.add_argument('-m', '--moon', type = str, default = 'dark', required = False,
                     help = 'Moon brightness [bright, dark], default is dark')
 
-parser.add_argument('-c','--clobber', type=bool, default=False, required=False,
+parser.add_argument('-c','--clobber', default=False, required=False, action='store_true', 
                     help='Clobber (overwrite) BAL catalog if it already exists?')
 
-parser.add_argument('-v','--verbose', type = bool, default = False, required = False,
+parser.add_argument('-v','--verbose', default=False, required=False, action='store_true', 
                     help = 'Provide verbose output?')
 
 

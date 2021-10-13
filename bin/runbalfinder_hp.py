@@ -60,10 +60,10 @@ parser.add_argument('-o','--outdir', type = str, default = None, required = True
 parser.add_argument('-l','--logfile', type = str, default = 'logfile.txt', required = False,
                     help = 'Name of log file written to outdir, default is logfile.txt')
 
-parser.add_argument('-c','--clobber', type = bool, default=False, required=False,
-                    help = 'Clobber (overwrite) BAL catalog if it already exists?')
+parser.add_argument('-c','--clobber', default=False, required=False, action='store_true',
+                    help='Clobber (overwrite) BAL catalog if it already exists?')
 
-parser.add_argument('-v','--verbose', type = bool, default = False, required = False,
+parser.add_argument('-v','--verbose', default=False, required=False, action='store_true',
                     help = 'Provide verbose output?')
 
 args  = parser.parse_args()
