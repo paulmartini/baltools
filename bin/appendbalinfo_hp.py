@@ -24,6 +24,7 @@ from baltools import balconfig as bc
 from baltools import fitbal
 from baltools import popqsotab as pt
 
+
 def pmmkdir(direct): 
     if not os.path.isdir(direct):
         try:
@@ -33,22 +34,33 @@ def pmmkdir(direct):
             print("Error: no permission to make directory ", direct)
             exit(1)
 
+balcols = ['PCA_COEFFS', 'PCA_CHI2', 'BAL_PROB', 'BI_CIV', 'ERR_BI_CIV', 'NCIV_2000', 'VMIN_CIV_2000', 'VMAX_CIV_2000', 'POSMIN_CIV_2000', 'FMIN_CIV_2000', 'AI_CIV', 'ERR_AI_CIV', 'NCIV_450', 'VMIN_CIV_450', 'VMAX_CIV_450', 'POSMIN_CIV_450', 'FMIN_CIV_450', 'BI_SIIV', 'ERR_BI_SIIV', 'NSIIV_2000', 'VMIN_SIIV_2000', 'VMAX_SIIV_2000', 'POSMIN_SIIV_2000', 'FMIN_SIIV_2000', 'AI_SIIV', 'ERR_AI_SIIV', 'NSIIV_450', 'VMIN_SIIV_450', 'VMAX_SIIV_450', 'POSMIN_SIIV_450', 'FMIN_SIIV_450']
+
+def balcopy(qinfo, binfo):
+    for balcol in balcols: 
+        qinfo[balcol] = binfo[balcol]
+    qinfo['BALMASK'] = 0
+
+
 os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="""Update existing QSO catalogue with BAL information""")
 
 parser.add_argument('-q', '--qsocat', type = str, default = None, required = True,
-                    help = 'Input QSO catalogue for which information is to be added to')
+                    help = 'Input QSO catalog')
 
 parser.add_argument('-b','--baldir', type=str, default = None, required=True,
                     help='Path to directory structure with individual BAL catalogs')
 
-parser.add_argument('-o','--outdir', type = str, default = None, required = True,
-                    help = 'Root directory for output catalogue')
+parser.add_argument('-o','--outcat', type=str, default="qso-balcat.fits", 
+                    required=False, help='Filename of output QSO+BAL catalog')
 
-parser.add_argument('-f','--filename', type=str, default="qsocat.fits", 
-                    required=False, help='Filename of output QSO catalog')
+parser.add_argument('-s', '--survey', type = str, default = 'main', required = False,
+                    help = 'Survey subdirectory [sv1, sv2, sv3, main], default is main')
+
+parser.add_argument('-m', '--moon', type = str, default = 'dark', required = False,
+                    help = 'Moon brightness [bright, dark], default is dark')
 
 parser.add_argument('-c','--clobber', type=bool, default=False, required=False,
                     help='Clobber (overwrite) BAL catalog if it already exists?')
@@ -59,54 +71,53 @@ parser.add_argument('-v','--verbose', type = bool, default = False, required = F
 
 args  = parser.parse_args()
 
-outdir   = args.outdir
-filename = args.filename
-qsocat   = args.qsocat
-baldir   = args.baldir
-
-
-if not os.path.isfile(qsocat):
-    print("Error: cannot find ", qsocat)
+# Check the QSO catalog exists
+if not os.path.isfile(args.qsocat):
+    print("Error: cannot find ", args.qsocat)
     exit(1)
     
-# Checks whether outdir exists. If it does not, makes it if permitted.
-pmmkdir(outdir)
     
-outcat = os.path.join(outdir, filename)
-# Adds empty BAL cols to qso cat and writes to outcat.
+# Full path to the output QSO+BAL catalog
+outcat = os.path.join(args.baldir, args.outcat) 
+
+# Add empty BAL cols to qso cat and writes to outcat.
 # Stores return value (BAL card names) in cols
-cols = pt.inittab(qsocat, outcat)
-# Want to manually set this to -1 to show that it is not populated
-cols.remove('BAL_PROB')
+cols = pt.inittab(args.qsocat, outcat)
+# # Want to manually set this to -1 to show that it is not populated
+# cols.remove('BAL_PROB')
 
-cathdu    = fits.open(qsocat)
-lencat = len(cathdu[1].data['TARGETID'])
+qhdu = fits.open(outcat)
+qcat = qhdu[1].data
 
-healpixels = hp.ang2pix(64, cathdu[1].data['TARGET_RA'], cathdu[1].data['TARGET_DEC'], lonlat=True, nest=True)
+# Calculate healpix for every QSO 
+healpixels = hp.ang2pix(64, qcat['TARGET_RA'], qcat['TARGET_DEC'], lonlat=True, nest=True)
+
+# Construct a list of unique healpix pixels
 healpixlist = np.unique(healpixels)
+
+# Construct an array of indices for the QSO catalog
+hindxs = np.arange(0, len(qcat), dtype=int)
 
 if args.verbose: 
     print("Found {0} entries with {1} unique healpix".format(len(healpixels), len(healpixlist)))
 
 # /global/cfs/cdirs/desi/users/martini/everest/healpix/sv3/dark/93/9338/baltable-sv3-dark-9338.fits
-for healpix in healpixlist[:1]: 
-    balfilename = "baltable-{0}-dark-{1}.fits".format(survey, healpix) 
+for healpix in healpixlist: 
+    balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
+    balfile = os.path.join(args.baldir, str(healpix)[:len(str(healpix))-2], str(healpix), balfilename)
+    bhdu = fits.open(balfile) 
+    bcat = bhdu['BALCAT'].data
+    hmask = healpixels == healpix
+    if args.verbose: 
+        print(healpix, len(str(healpix)), str(healpix)[:len(str(healpix))-2], balfile, os.path.isfile(balfile), np.sum(hmask))
+    indxs = hindxs[hmask] # indices in qcat that are in pixel healpix
+    for i, targetid in enumerate(bhdu['BALCAT'].data['TARGETID']):
+        ind = np.where(targetid == qcat['TARGETID'])[0]
+        if len(ind) > 0:
+            print(i, targetid, qcat['TARGETID'][ind[0]], qcat['Z'][ind[0]], ind[0], qcat['BALMASK'][ind[0]], qcat['BI_CIV'][ind[0]])
+            balcopy(qcat[ind[0]], bhdu['BALCAT'].data[i])
+            print(i, targetid, qcat['TARGETID'][ind[0]], qcat['Z'][ind[0]], ind[0], qcat['BALMASK'][ind[0]], qcat['BI_CIV'][ind[0]])
 
-    balfilename = coaddfilename.replace('coadd-', 'baltable-')
+qhdu.writeto(outcat, overwrite=True)
+print("Wrote ", outcat) 
 
-    indir = os.path.join(dataroot, healpix[:len(healpix)-2], healpix)
-    outdir = os.path.join(outroot, healpix[:len(healpix)-2], healpix)
-
-    coaddfile = os.path.join(indir, coaddfilename)
-    balfile = os.path.join(outdir, balfilename)
-
-
-for catindex in range(lencat):
-    pt.addbalinfo(outcat, baldir, catindex, cols, overwrite=args.clobber, verbose=args.verbose)
-    
-    target = str(cathdu[1].data['TARGETID'][catindex])
-    
-    if args.verbose:
-        print(("Target ", target, " complete."))
-    
-    
