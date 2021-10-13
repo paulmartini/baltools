@@ -114,9 +114,8 @@ for healpix in healpixlist:
     for i, targetid in enumerate(bhdu['BALCAT'].data['TARGETID']):
         ind = np.where(targetid == qcat['TARGETID'])[0]
         if len(ind) > 0:
-            print(i, targetid, qcat['TARGETID'][ind[0]], qcat['Z'][ind[0]], ind[0], qcat['BALMASK'][ind[0]], qcat['BI_CIV'][ind[0]])
             balcopy(qcat[ind[0]], bhdu['BALCAT'].data[i])
-            print(i, targetid, qcat['TARGETID'][ind[0]], qcat['Z'][ind[0]], ind[0], qcat['BALMASK'][ind[0]], qcat['BI_CIV'][ind[0]])
+            # print(i, targetid, qcat['TARGETID'][ind[0]], qcat['Z'][ind[0]], ind[0], qcat['BALMASK'][ind[0]], qcat['BI_CIV'][ind[0]])
 
 qhdu.writeto(outcat, overwrite=True)
 print("Wrote ", outcat) 
