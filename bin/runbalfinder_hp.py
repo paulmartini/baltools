@@ -17,7 +17,6 @@ from glob import glob
 
 from time import gmtime, strftime
 import argparse
-import fitsio
 from collections import defaultdict
 import desispec.io
 from desispec.coaddition import coadd_cameras
