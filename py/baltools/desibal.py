@@ -117,8 +117,8 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, r
     # the nominal redshift range for BALs
     # BAL_ZMIN = 1.57
     # BAL_ZMAX = 5.0
-    zmask = zs['Z'] > bc.BAL_ZMIN
-    zmask = zmask*(zs['Z'] < bc.BAL_ZMAX)
+    zmask = zs['Z'] >= bc.BAL_ZMIN
+    zmask = zmask*(zs['Z'] <= bc.BAL_ZMAX)
     
     if 'QSO' in np.unique(zs['SPECTYPE']) :
         zmask = zmask*(zs['SPECTYPE'] == 'QSO')
