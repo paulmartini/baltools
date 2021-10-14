@@ -19,9 +19,10 @@ from astropy.io import fits
 import healpy as hp
 
 import argparse
+from time import gmtime, strftime
 
 from baltools import balconfig as bc
-from baltools import fitbal
+# from baltools import fitbal
 from baltools import popqsotab as pt
 
 
@@ -62,6 +63,9 @@ parser.add_argument('-s', '--survey', type = str, default = 'main', required = F
 parser.add_argument('-m', '--moon', type = str, default = 'dark', required = False,
                     help = 'Moon brightness [bright, dark], default is dark')
 
+parser.add_argument('-l','--logfile', type = str, default = 'logfile-{survey}-{moon}.txt', required = False,
+                    help = 'Name of log file written to outdir, default is logfile-{survey}-{moon}.txt')
+
 parser.add_argument('-c','--clobber', default=False, required=False, action='store_true', 
                     help='Clobber (overwrite) BAL catalog if it already exists?')
 
@@ -101,8 +105,19 @@ hindxs = np.arange(0, len(qcat), dtype=int)
 if args.verbose: 
     print("Found {0} entries with {1} unique healpix".format(len(healpixels), len(healpixlist)))
 
+# logfile = os.path.join(args.baldir, args.logfile) 
+logfile = os.path.join(args.baldir, "logfile-{0}-{1}.txt".format(args.survey, args.moon))
+f = open(logfile, 'a')
+lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+commandline = " ".join(sys.argv)
+f.write(lastupdate)
+f.write(commandline+'\n')
+outstr = "Healpix NQSOs Nmatches \n"
+f.write(outstr)
+
 # /global/cfs/cdirs/desi/users/martini/everest/healpix/sv3/dark/93/9338/baltable-sv3-dark-9338.fits
 for healpix in healpixlist: 
+    nmatch = 0
     balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
     balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix), balfilename)
     bhdu = fits.open(balfile) 
@@ -111,13 +126,17 @@ for healpix in healpixlist:
     hmask = healpixels == healpix  # mask of everything in qcat in this healpix
 
     if args.verbose: 
-        print(healpix, len(str(healpix)), str(healpix)[:len(str(healpix))-2], balfile, os.path.isfile(balfile), np.sum(hmask))
+        print("Processing: ", healpix, balfile) 
     indxs = hindxs[hmask] # indices in qcat that are in pixel healpix
     for i, targetid in enumerate(bhdu['BALCAT'].data['TARGETID']):
         ind = np.where(targetid == qcat['TARGETID'])[0]
         if len(ind) > 0:
+            nmatch += 1
             balcopy(qcat[ind[0]], bhdu['BALCAT'].data[i])
             # print(i, targetid, qcat['TARGETID'][ind[0]], qcat['Z'][ind[0]], ind[0], qcat['BALMASK'][ind[0]], qcat['BI_CIV'][ind[0]])
+    f.write("{0}: {1} {2}\n".format(balfilename, len(bcat), nmatch) )
+
+f.close()
 
 # Apply redshift range mask
 zmask = qcat['Z'] >= bc.BAL_ZMIN
@@ -128,4 +147,3 @@ qcat['BALMASK'][zmask] += zbit[zmask]
 
 qhdu.writeto(outcat, overwrite=True)
 print("Wrote ", outcat) 
-
