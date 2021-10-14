@@ -115,7 +115,6 @@ f.write(commandline+'\n')
 outstr = "Healpix NQSOs Nmatches \n"
 f.write(outstr)
 
-# /global/cfs/cdirs/desi/users/martini/everest/healpix/sv3/dark/93/9338/baltable-sv3-dark-9338.fits
 for healpix in healpixlist: 
     nmatch = 0
     balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
@@ -145,5 +144,6 @@ zmask = ~zmask # check to True for out of redshift range
 zbit = 2*np.ones(len(zmask), dtype=np.ubyte) # bitmask for out of redshift range
 qcat['BALMASK'][zmask] += zbit[zmask]
 
+qhdu[1].header['EXTNAME'] = 'BALCAT'
 qhdu.writeto(outcat, overwrite=True)
 print("Wrote ", outcat) 

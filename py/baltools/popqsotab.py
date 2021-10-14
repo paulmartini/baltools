@@ -98,8 +98,9 @@ def inittab(qsocatpath, outtab):
     '''
     
     #Open input catalogue fits file to get num objects in catalogue.
-    cathdu = fits.open(qsocatpath)
+    cathdu = fits.open(qsocatpath, lazy_load_hdus=False)
     NROWS  = len(cathdu[1].data)
+    cathdu.info()
     
     # PCA Fit Coefficients and chisq result
     pca_array = np.zeros([NROWS, bc.NPCA], dtype=float)  # PCA Fit Coefficients
@@ -175,6 +176,9 @@ def inittab(qsocatpath, outtab):
     newbhdu = fits.BinTableHDU.from_columns(totcols)
     #Update BinHDU of cathdu with newbhdu
     cathdu[1] = newbhdu 
+    cathdu[1].header['EXTNAME'] = 'BALCAT'
+
+    cathdu.info()
     
     try:
         cathdu.writeto(outtab)
