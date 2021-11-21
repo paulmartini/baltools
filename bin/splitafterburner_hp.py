@@ -146,6 +146,7 @@ for healpix in healpixlist:
     # print(np.where(col6['SPECTYPE'] != 'QSO') )
 
     ztabhdu = fits.BinTableHDU.from_columns([col0, col1, col2, col3, col4, col5, col6])
+    ztabhdu.header['EXTNAME'] = 'REDSHIFTS'
 
     ztabhdu.writeto(zfile, overwrite=args.clobber)  
      
