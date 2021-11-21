@@ -109,8 +109,8 @@ commandline = " ".join(sys.argv)
 f.write(lastupdate)
 f.write(commandline+'\n')
 
-# For each tile in inputtiles, get the list of dates, create output 
-# directories, identify BALs, and create catalogs 
+# For each healpix in inputhealpixels, identify the coadd data
+# and run desibalfilder
 for healpix in inputhealpixels: 
     coaddfilename = "coadd-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
     balfilename = coaddfilename.replace('coadd-', 'baltable-')
