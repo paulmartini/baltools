@@ -134,9 +134,7 @@ for healpix in inputhealpixels:
     if args.altzdir is not None: 
         if zfileroot is None:
             zfileroot = 'redrock'
-        # altzfilename = "{0}-{1}-{2}-{3}.fits".format(zfileroot, args.survey, args.moon, healpix) 
         altzdir = os.path.join(args.altzdir, 'healpix', args.survey, args.moon, healpix[:len(healpix)-2], healpix) 
-        # altzfile = os.path.join(altzdir, altzfilename) 
 
     if args.verbose:
         print("Coadd file: ", coaddfile)
