@@ -144,6 +144,6 @@ zmask = ~zmask # check to True for out of redshift range
 zbit = 2*np.ones(len(zmask), dtype=np.ubyte) # bitmask for out of redshift range
 qcat['BALMASK'][zmask] += zbit[zmask]
 
-qhdu[1].header['EXTNAME'] = 'BALCAT'
+qhdu[1].header['EXTNAME'] = 'ZCATALOG'
 qhdu.writeto(outcat, overwrite=True)
 print("Wrote ", outcat) 
