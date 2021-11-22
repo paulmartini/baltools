@@ -47,6 +47,12 @@ parser.add_argument('-hp','--healpix', nargs='*', default = None, required=False
 parser.add_argument('-r', '--release', type = str, default = 'everest', required = False,
                     help = 'Data release subdirectory, default is everest')
 
+parser.add_argument('-a','--altzdir', type=str, default = None, required=True,
+                    help='Path to directory structure with healpix-based afterburner redshift catalogs')
+
+parser.add_argument('-z','--zfileroot', type=str, default= None, required=False, 
+                    help='Root name of healpix-based afterburner redshift catalogs')
+
 parser.add_argument('-s', '--survey', type = str, default = 'main', required = False,
                     help = 'Survey subdirectory [sv1, sv2, sv3, main], default is main')
 
@@ -87,6 +93,8 @@ for healpixdir in healpixdirs:
 # Requested healpix
 inputhealpixels = args.healpix
 
+zfileroot = args.zfileroot
+
 # Check that all requested healpix exist
 if inputhealpixels is not None:
     for inputhealpixel in inputhealpixels: 
@@ -111,7 +119,8 @@ f.write(commandline+'\n')
 
 # For each healpix in inputhealpixels, identify the coadd data
 # and run desibalfilder
-for healpix in inputhealpixels: 
+# for healpix in inputhealpixels: 
+for healpix in ['11195']: 
     coaddfilename = "coadd-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
     balfilename = coaddfilename.replace('coadd-', 'baltable-')
 
@@ -121,13 +130,22 @@ for healpix in inputhealpixels:
     coaddfile = os.path.join(indir, coaddfilename) 
     balfile = os.path.join(outdir, balfilename) 
 
+    if args.altzdir is not None: 
+        if zfileroot is None:
+            zfileroot = 'redrock'
+        altzfilename = "{0}-{1}-{2}-{3}.fits".format(zfileroot, args.survey, args.moon, healpix) 
+        altzdir = os.path.join(args.altzdir, healpix[:len(healpix)-2], healpix) 
+        altzfile = os.path.join(altzdir, altzfilename) 
+
     if args.verbose:
         print("Coadd file: ", coaddfile)
         print("BAL file: ", balfile)
+        if args.altzdir is not None: 
+            print("Redshift file: ", altzfile)
 
     if not os.path.isfile(balfile) or args.clobber:
         try:
-            db.desibalfinder(coaddfile, altbaldir=outdir, overwrite=args.clobber, verbose=args.verbose, release=args.release)
+            db.desibalfinder(coaddfile, altbaldir=outdir, altzdir=args.altzdir, zfileroot=zfileroot, overwrite=args.clobber, verbose=args.verbose, release=args.release)
         except:
             print("An error occured at healpix {}. Adding healpix to issuehealpixels list.".format(healpix))
             errortype = sys.exc_info()[0]
