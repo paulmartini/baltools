@@ -28,7 +28,7 @@ import getpass
 
 
 
-def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, release=None, format='healpix'): 
+def desibalfinder(specfilename, altbaldir=None, altzdir=None, zfileroot='zbest', overwrite=True, verbose=False, release=None, format='healpix'): 
     '''
     Find BALs in DESI quasars
     1. Identify all objects classified as quasars that are in the redshift
@@ -42,6 +42,10 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, r
         FITS file with DESI spectra
     altbaldir : string, optional
         alternate output directory for catalog (default is None)
+    altzdir : string, optional
+        alternate directory to find redshift catalog (default in None, which will look in the coadd directory) 
+    zfileroot : string, optional 
+        root name for redshift catalog 
     overwrite : bool, optional
         Overwrite the BAL catalog if it exists? (default is True)
     verbose : bool, optional
@@ -55,23 +59,31 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, r
     -------
     none
     ''' 
+
+    if release is None:
+        release = 'everest'
    
-    zfileroot = 'zbest' 
-    if release == 'everest': 
-        zfileroot = 'redrock' 
+    if zfileroot is None: 
+        if release == 'everest': 
+            zfileroot = 'redrock' 
+        else: 
+            zfileroot = 'zbest' 
 
     # Define some variable names based on the type of input file
     if 'spectra-' in specfilename:
         specshort = specfilename[specfilename.rfind('spectra-'):specfilename.rfind('.fits')]
-        zshort = specshort.replace('spectra', zfilelroot)
-        zfilename = specfilename.replace(specshort, zshort)
+        zshort = specshort.replace('spectra', zfileroot)
     elif 'coadd-' in specfilename:
         specshort = specfilename[specfilename.rfind('coadd-'):specfilename.rfind('.fits')]
         zshort = specshort.replace('coadd', zfileroot)
-        zfilename = specfilename.replace(specshort, zshort)
     else:
-        print("Error: unable to find redshift file for {}".format(specfilename))
+        print("Error in desibalfinder(): unable to parse {}".format(specfilename))
         return
+
+    zfilename = specfilename.replace(specshort, zshort)
+
+    if altzdir is not None: 
+        zfilename = os.path.join(altzdir, zshort+".fits") 
 
     # Define output file name and check if it exists if overwrite=False
     if 'spectra-' in specfilename:
@@ -79,7 +91,7 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, r
     elif 'coadd-' in specfilename:
         balshort = specshort.replace('coadd-', 'baltable-')
     else:
-        print("Error: unable to interpret {}".format(specfilename))
+        print("Error in desibalfinder(): unable to interpret {}".format(specfilename))
         return
 
     baltmp = specfilename.replace(specshort, balshort)
@@ -109,9 +121,9 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, r
             specobj = coadd_cameras(specobj, cosmics_nsig=None)
             print("coadded_cameras using lispace resample")
             
-
-
     zs = fitsio.read(zfilename)
+
+    print("Read file {}".format(zfilename))
 
     # Identify the spectra classified as quasars based on zs and within 
     # the nominal redshift range for BALs
@@ -127,14 +139,28 @@ def desibalfinder(specfilename, altbaldir=None, overwrite=True, verbose=False, r
 
     zqsos = []
     dd = defaultdict(list)
+    # Create a dictionary with the index of each TARGETID in zs in 
+    # the BAL redshift range. 
+    # Create an array of indices in zs of those quasars 
     for index, item in enumerate(zs['TARGETID']):
         if zmask[index]: 
             dd[item].append(index)
             zqsos.append(index)
 
+    if verbose: 
+      print("Found {} quasars".format(np.sum(zmask)))
+
     fm = specobj.fibermap
     # Create a list of the indices in specobj on which to run balfinder
-    qsos = [index for item in fm["TARGETID"] for index in dd[item] if item in dd]
+    # Note afterburners catalogs have different lengths from redrock catalogs
+    if altzdir is None: 
+        qsos = [index for item in fm["TARGETID"] for index in dd[item] if item in dd]
+    else: 
+        qsos = []
+        for zindx in zqsos:
+            tid = zs['TARGETID'][zindx]
+            qindx = np.where(tid == fm['TARGETID'])[0][0]
+            qsos.append(qindx)
 
     # Initialize the BAL table with all quasars in 'qsos'
     baltable.initbaltab_desi(fm[qsos], zs[zqsos], balfilename, overwrite=overwrite, release=release)

@@ -1,14 +1,11 @@
 #!/usr/bin/env python
 """
 
-baltools.appendbalinfo_hp
+baltools.splitafterburner_hp
 =========================
 
-Utilizes functinos from popqsotab.py to add empty BAL columns to existing
-QSO catalogue and add information from baltables to new catalogue.
-runbalfinder.py tables
-
-2021 Original code by Simon Filbert
+Split an afterburner redshift catalog into separate, healpix-based redshift catalogs in order 
+to run the balfilder on individual healpix files
 
 """
 
@@ -22,9 +19,7 @@ import argparse
 from time import gmtime, strftime
 
 from baltools import balconfig as bc
-# from baltools import fitbal
 from baltools import popqsotab as pt
-
 
 def pmmkdir(direct): 
     if not os.path.isdir(direct):
@@ -46,16 +41,16 @@ def balcopy(qinfo, binfo):
 os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description="""Update existing QSO catalogue with BAL information""")
+                                     description="""Split an afterburner into redshift catalogs organized by healpix""")
 
 parser.add_argument('-q', '--qsocat', type = str, default = None, required = True,
                     help = 'Input QSO catalog')
 
-parser.add_argument('-b','--baldir', type=str, default = None, required=True,
-                    help='Path to directory structure with individual BAL catalogs')
+parser.add_argument('-a','--altzdir', type=str, default = None, required=True,
+                    help='Path to directory structure with healpix-based afterburner redshift catalogs')
 
-parser.add_argument('-o','--outcatfile', type=str, default="qso-balcat.fits", 
-                    required=False, help='Filename of output QSO+BAL catalog')
+parser.add_argument('-z','--zfileroot', type=str, default="zafter", 
+                    required=False, help='Root name of healpix-based afterburner redshift catalogs')
 
 parser.add_argument('-s', '--survey', type = str, default = 'main', required = False,
                     help = 'Survey subdirectory [sv1, sv2, sv3, main], default is main')
@@ -81,16 +76,16 @@ if not os.path.isfile(args.qsocat):
     exit(1)
     
     
-# Full path to the output QSO+BAL catalog
-outcat = os.path.join(args.baldir, args.outcatfile) 
-
-# Add empty BAL cols to qso cat and writes to outcat.
-# Stores return value (BAL card names) in cols
-cols = pt.inittab(args.qsocat, outcat)
-# # Want to manually set this to -1 to show that it is not populated
-# cols.remove('BAL_PROB')
-
-qhdu = fits.open(outcat)
+# # Full path to the output QSO+BAL catalog
+# outcat = os.path.join(args.baldir, args.outcatfile) 
+# 
+# # Add empty BAL cols to qso cat and writes to outcat.
+# # Stores return value (BAL card names) in cols
+# cols = pt.inittab(args.qsocat, outcat)
+# # # Want to manually set this to -1 to show that it is not populated
+# # cols.remove('BAL_PROB')
+ 
+qhdu = fits.open(args.qsocat)
 qcat = qhdu[1].data
 
 # Calculate healpix for every QSO 
@@ -106,7 +101,7 @@ if args.verbose:
     print("Found {0} entries with {1} unique healpix".format(len(healpixels), len(healpixlist)))
 
 # logfile = os.path.join(args.baldir, args.logfile) 
-logfile = os.path.join(args.baldir, "logfile-{0}-{1}.txt".format(args.survey, args.moon))
+logfile = os.path.join(args.altzdir, "logfile-{0}-{1}.txt".format(args.survey, args.moon))
 f = open(logfile, 'a')
 lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
 commandline = " ".join(sys.argv)
@@ -116,34 +111,50 @@ outstr = "Healpix NQSOs Nmatches \n"
 f.write(outstr)
 
 for healpix in healpixlist: 
-    nmatch = 0
-    balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
-    balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix), balfilename)
-    bhdu = fits.open(balfile) 
-    bcat = bhdu['BALCAT'].data
+    zfilename = "{0}-{1}-{2}-{3}.fits".format(args.zfileroot, args.survey, args.moon, healpix) 
+    zdir = os.path.join(args.altzdir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix))
+    pmmkdir(zdir) 
+    zfile = os.path.join(args.altzdir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix), zfilename)
+    # bhdu = fits.open(balfile) 
+    # bcat = bhdu['BALCAT'].data
+     
+    # Check if the file already exists
+    if os.path.isfile(zfile) and args.clobber == False:
+        print("Error: {0} exists and clobber = False".format(zfile))
+        continue
 
     hmask = healpixels == healpix  # mask of everything in qcat in this healpix
 
+    nqsos = np.sum(hmask)
+    spectypes = np.empty(len(hmask), dtype='<U3')
+    spectypes.fill('QSO')
+
     if args.verbose: 
-        print("Processing: ", healpix, balfile) 
+        print("Processing healpix {0} with {1} into file {2} ".format(healpix, nqsos, zfile))
+
     indxs = hindxs[hmask] # indices in qcat that are in pixel healpix
-    for i, targetid in enumerate(bhdu['BALCAT'].data['TARGETID']):
-        ind = np.where(targetid == qcat['TARGETID'])[0]
-        if len(ind) > 0:
-            nmatch += 1
-            balcopy(qcat[ind[0]], bhdu['BALCAT'].data[i])
-            # print(i, targetid, qcat['TARGETID'][ind[0]], qcat['Z'][ind[0]], ind[0], qcat['BALMASK'][ind[0]], qcat['BI_CIV'][ind[0]])
-    f.write("{0}: {1} {2}\n".format(balfilename, len(bcat), nmatch) )
+
+    # Create the fits table:
+    col0 = fits.Column(name='TARGETID', format='K', array=qcat['TARGETID'][hmask])
+    col1 = fits.Column(name='TARGET_RA', format='E', array=qcat['TARGET_RA'][hmask])
+    col2 = fits.Column(name='TARGET_DEC', format='E', array=qcat['TARGET_DEC'][hmask])
+    col3 = fits.Column(name='Z', format='E', array=qcat['Z'][hmask])
+    col4 = fits.Column(name='ZERR', format='E', array=qcat['ZERR'][hmask])
+    col5 = fits.Column(name='ZWARN', format='E', array=qcat['ZWARN'][hmask])
+    col6 = fits.Column(name='SPECTYPE', format='6A', array=spectypes[hmask])
+
+    # print(np.where(col6['SPECTYPE'] != 'QSO') )
+
+    ztabhdu = fits.BinTableHDU.from_columns([col0, col1, col2, col3, col4, col5, col6])
+    ztabhdu.header['EXTNAME'] = 'REDSHIFTS'
+
+    ztabhdu.writeto(zfile, overwrite=args.clobber)  
+     
+    if args.verbose:
+        print("Wrote output file {0}".format(zfile))
+
+    f.write("{0}: {1}\n".format(zfilename, nqsos))
 
 f.close()
 
-# Apply redshift range mask
-zmask = qcat['Z'] >= bc.BAL_ZMIN
-zmask = zmask*(qcat['Z'] <= bc.BAL_ZMAX)
-zmask = ~zmask # check to True for out of redshift range
-zbit = 2*np.ones(len(zmask), dtype=np.ubyte) # bitmask for out of redshift range
-qcat['BALMASK'][zmask] += zbit[zmask]
-
-qhdu[1].header['EXTNAME'] = 'ZCATALOG'
-qhdu.writeto(outcat, overwrite=True)
-print("Wrote ", outcat) 
+print("Finished")
