@@ -26,8 +26,6 @@ from baltools import balconfig as bc
 from baltools import baltable
 import getpass
 
-
-
 def desibalfinder(specfilename, altbaldir=None, altzdir=None, zfileroot='zbest', overwrite=True, verbose=False, release=None, format='healpix'): 
     '''
     Find BALs in DESI quasars
@@ -104,7 +102,7 @@ def desibalfinder(specfilename, altbaldir=None, altzdir=None, zfileroot='zbest',
     print("Output BAL catalog:", balfilename)
 
     if os.path.isfile(balfilename) and not overwrite:
-        print("BAL catalog already exists and overwrite/clobber = False")
+        print("desibal(): Warning {0} exists and overwrite = False, so not re-running balfinder".format(balfilename))
         return
 
     # Read in the DESI spectra
@@ -186,10 +184,12 @@ def desibalfinder(specfilename, altbaldir=None, altzdir=None, zfileroot='zbest',
         if verbose: 
             print("{0} Processed {1} at z = {2:.2f}: AI_CIV = {3:.0f}, BI_CIV = {4:.0f}".format(i, targetid, zspec, info['AI_CIV'], info['BI_CIV']))
 
+
+    balhdu.writeto(balfilename, overwrite=True)
+
     if verbose: 
         print("Wrote BAL catalog {0}".format(balfilename))
 
-    balhdu.writeto(balfilename, overwrite=True)
     lastupdate = "Last updated {0} UT by {1}".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), getpass.getuser())
     fits.setval(balfilename, 'HISTORY', value=lastupdate, ext=1)
 
