@@ -21,6 +21,7 @@ import sys
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table, vstack
+import fitsio
 
 sys.path.append("/global/homes/s/simonmf/baltools/py")
 from baltools import balconfig as bc
@@ -100,6 +101,11 @@ def inittab(qsocatpath, outtab):
     #Open input catalogue fits file to get num objects in catalogue.
     cathdu = fits.open(qsocatpath, lazy_load_hdus=False)
     NROWS  = len(cathdu[1].data)
+
+    # Check if strings have been turned into character arrays, and if so read the catalog with fitsio instead
+    # This is necessary for fuji and guadalupe
+    if cathdu[1].data['SURVEY'].dtype == 'O':
+        cathdu[1].data = fitsio.read(qsocatpath) 
     
     # PCA Fit Coefficients and chisq result
     pca_array = np.zeros([NROWS, bc.NPCA], dtype=float)  # PCA Fit Coefficients

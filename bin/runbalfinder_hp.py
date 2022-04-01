@@ -113,7 +113,15 @@ issuehealpixels = []
 errortypes = []
 
 f = open(outroot + "/" + args.logfile, 'a') 
-lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+try: 
+    lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+except FileNotFoundError: 
+    try: 
+        lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('LOGNAME'))
+    except: 
+        print("Error with tagging log file") 
+        lastupdate = "Last updated {0} UT \n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime())) 
+
 commandline = " ".join(sys.argv)
 f.write(lastupdate)
 f.write(commandline+'\n')
