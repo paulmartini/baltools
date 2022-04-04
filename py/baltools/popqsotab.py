@@ -181,7 +181,7 @@ def inittab(qsocatpath, outtab):
     newbhdu = fits.BinTableHDU.from_columns(totcols)
     #Update BinHDU of cathdu with newbhdu
     cathdu[1] = newbhdu 
-    cathdu[1].header['EXTNAME'] = 'BALCAT'
+    cathdu[1].header['EXTNAME'] = 'ZCATALOG'
 
     try:
         cathdu.writeto(outtab)
