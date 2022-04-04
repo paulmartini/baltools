@@ -115,12 +115,15 @@ errortypes = []
 f = open(outroot + "/" + args.logfile, 'a') 
 try: 
     lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
-except FileNotFoundError: 
+except: 
     try: 
-        lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('LOGNAME'))
+        lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('USER'))
     except: 
-        print("Error with tagging log file") 
-        lastupdate = "Last updated {0} UT \n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime())) 
+        try: 
+            lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('LOGNAME'))
+        except: 
+            print("Error with tagging log file") 
+            lastupdate = "Last updated {0} UT \n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime())) 
 
 commandline = " ".join(sys.argv)
 f.write(lastupdate)
