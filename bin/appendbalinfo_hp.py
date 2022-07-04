@@ -108,7 +108,17 @@ if args.verbose:
 # logfile = os.path.join(args.baldir, args.logfile) 
 logfile = os.path.join(args.baldir, "logfile-{0}-{1}.txt".format(args.survey, args.moon))
 f = open(logfile, 'a')
-lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+try:
+    lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+except:
+    try:
+        lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('USER'))
+    except:
+        try:
+            lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('LOGNAME'))
+        except:
+            print("Error with tagging log file")
+            lastupdate = "Last updated {0} UT \n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()))
 commandline = " ".join(sys.argv)
 f.write(lastupdate)
 f.write(commandline+'\n')
@@ -119,7 +129,13 @@ for healpix in healpixlist:
     nmatch = 0
     balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
     balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix), balfilename)
-    bhdu = fits.open(balfile) 
+    try: 
+        bhdu = fits.open(balfile) 
+    except FileNotFoundError:
+        print(f"Warning: Did not find {balfile}")
+        print(f"Skipping {healpix}") 
+        continue
+
     bcat = bhdu['BALCAT'].data
 
     hmask = healpixels == healpix  # mask of everything in qcat in this healpix
