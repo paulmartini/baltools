@@ -150,7 +150,8 @@ def getdr14spectra(array, verbose=True):
         if os.path.isdir(bc.specdir1 + plate4):  # First search in DR14 directories
             try: 
                 specfile = bc.specdir1 + plate4 + '/' + specfits
-                spec = fitsio.read(specfile)
+                # spec = fitsio.read(specfile)
+                spec = fits.open(specfile)
                 if verbose:
                     print ("Found %s on disk" % specfits)
             except: 
@@ -159,7 +160,8 @@ def getdr14spectra(array, verbose=True):
             if os.path.isdir(bc.specdir2 + '26/spectra/lite/' + plate4):  
                 try: 
                     specfile = bc.specdir2 + '26/spectra/lite/' + plate4 + '/' + specfits
-                    spec = fitsio.read(specfile)
+                    # spec = fitsio.read(specfile)
+                    spec = fits.open(specfile)
                     if verbose:
                         print ("Found %s on disk" % specfits)
                 except: 
@@ -167,7 +169,8 @@ def getdr14spectra(array, verbose=True):
             elif os.path.isdir(bc.specdir2 + '103/spectra/lite/' + plate4):  
                 try: 
                     specfile = bc.specdir2 + '103/spectra/lite/' + plate4 + '/' + specfits
-                    spec = fitsio.read(specfile)
+                    # spec = fitsio.read(specfile)
+                    spec = fits.open(specfile)
                     if verbose:
                         print ("Found %s on disk" % specfits)
                 except: 
@@ -175,7 +178,8 @@ def getdr14spectra(array, verbose=True):
             elif os.path.isdir(bc.specdir2 + '104/spectra/lite/' + plate4):  
                 try: 
                     specfile = bc.specdir2 + '104/spectra/lite/' + plate4 + '/' + specfits
-                    spec = fitsio.read(specfile)
+                    #spec = fitsio.read(specfile)
+                    spec = fits.open(specfile)
                     if verbose:
                         print ("Found %s on disk" % specfits)
                 except: 
@@ -199,12 +203,14 @@ def getdr14spectra(array, verbose=True):
         # Download spectra if needed
         try:
             specfile = bc.specdir + plate4 + '/' + specfits
-            spec = fitsio.read(specfile)
+            # spec = fitsio.read(specfile)
+            spec = fits.open(specfile)
             if verbose:
                 print ("Found %s on disk" % specfits)
         except FileNotFoundError:
             urllib.request.urlretrieve(specurl, bc.specdir+ plate4 + '/' + specfits)
-            spec = fitsio.read(specfile)
+            # spec = fitsio.read(specfile)
+            spec = fits.open(specfile)
             if verbose:
                 print("Downloaded %s" % specfits)
 
@@ -249,9 +255,16 @@ def getdr16spectra(array, verbose=True):
     plate4 = zeropad(plate4)
     fiberid4 = zeropad(fiberid4)
 
-    ebossdir = bc.specdir
-    # sdssdir = '/uufs/chpc.utah.edu/common/home/sdss/dr16/sdss/spectro/redux/'
-    sdssdir = '/uufs/chpc.utah.edu/common/home/sdss/dr9/sdss/spectro/redux/'
+    try: 
+        ebossdir = bc.specdir
+        sdssdir = bc.specdir
+    except AttributeError: 
+        try: 
+            ebossdir = bc.specdir1
+            sdssdir = bc.specdir2
+            bc.specdir = bc.specdir1
+        except:
+            print("Error with ebossdir") 
 
     specfits = "spec-%s-%s-%s.fits" % (plate4, mjd, fiberid4)
     if verbose: 
@@ -260,7 +273,8 @@ def getdr16spectra(array, verbose=True):
     if os.path.isdir(bc.specdir + plate4): 
         try: 
             specfile = bc.specdir + plate4 + '/' + specfits
-            spec = fitsio.read(specfile)
+            # spec = fitsio.read(specfile)
+            spec = fits.open(specfile)
             if verbose:
                 print ("Found %s on disk" % specfits)
         except: 
@@ -269,7 +283,8 @@ def getdr16spectra(array, verbose=True):
         if os.path.isdir(sdssdir + '26/spectra/lite/' + plate4):  
             try: 
                 specfile = sdssdir + '26/spectra/lite/' + plate4 + '/' + specfits
-                spec = fitsio.read(specfile)
+                # spec = fitsio.read(specfile)
+                spec = fits.open(specfile)
                 if verbose:
                     print ("Found %s on disk" % specfits)
             except: 
@@ -277,7 +292,8 @@ def getdr16spectra(array, verbose=True):
         elif os.path.isdir(sdssdir + '103/spectra/lite/' + plate4):  
             try: 
                 specfile = sdssdir + '103/spectra/lite/' + plate4 + '/' + specfits
-                spec = fitsio.read(specfile)
+                # spec = fitsio.read(specfile)
+                spec = fits.open(specfile)
                 if verbose:
                     print ("Found %s on disk" % specfits)
             except: 
@@ -285,7 +301,8 @@ def getdr16spectra(array, verbose=True):
         elif os.path.isdir(sdssdir + '104/spectra/lite/' + plate4):  
             try: 
                 specfile = sdssdir + '104/spectra/lite/' + plate4 + '/' + specfits
-                spec = fitsio.read(specfile)
+                # spec = fitsio.read(specfile)
+                spec = fits.open(specfile)
                 if verbose:
                     print ("Found %s on disk" % specfits)
             except: 

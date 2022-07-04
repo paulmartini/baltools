@@ -141,9 +141,9 @@ def plotbalfromcat(array, lam1=1260, lam2=1680, gmflag=False, verbose=False):
     specfits = "spec-%s-%s-%s.fits" % (plate4, mjd, fiberid4)
     # qsospec = fits.open(bc.specdir + plate4 + '/' + specfits) 
     try: 
-        qsospec = utils.getdr16spectra(array, verbose=verbose)
+        qsospec = utils.getdr16spectra(array, verbose=verbose)[1].data
     except FileNotFoundError:
-        qsospec = utils.getdr14spectra(array, verbose=verbose)
+        qsospec = utils.getdr14spectra(array, verbose=verbose)[1].data
 
     # qsospec = utils.getdr14spectra(array)
     pcaeigen = fitsio.read(bc.pcaeigenfile)
@@ -153,10 +153,14 @@ def plotbalfromcat(array, lam1=1260, lam2=1680, gmflag=False, verbose=False):
     lam_z = np.power(10, qsospec['loglam'])/(1.+zpca)
     mm = lam_z < lam2
     mm = mm * lam_z > lam1
+    #ax.plot(np.power(10, qsospec['loglam'][mm])/(1+zpca),
+    #        qsospec['flux'][mm])
     ax.plot(np.power(10, qsospec['loglam'][mm])/(1+zpca),
             qsospec['flux'][mm])
     ax.plot(lam_z, qsospec['model'], 'r:', label="SDSS Model") 
     ax.set_xlim(lam1, lam2)
+
+    print(qsospec['flux'][mm])
 
     try: 
         pcafit = fitbal.createpcatemplate(pcaeigen, array['PCA_COEFFS'])
