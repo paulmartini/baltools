@@ -93,13 +93,17 @@ for healpixdir in healpixdirs:
 # Requested healpix
 inputhealpixels = args.healpix
 
+if args.verbose: 
+    print(inputhealpixels) 
+    print("healpixels: ", healpixels)
+
 zfileroot = args.zfileroot
 altzdir = None
 
 # Check that all requested healpix exist
 if inputhealpixels is not None:
     for inputhealpixel in inputhealpixels: 
-        assert(inputhealpixel in healpixels), "Healpix {} not available".format(inputhealpixel)
+        assert(str(inputhealpixel) in healpixels), "Healpix {} not available".format(inputhealpixel)
 else:
     inputhealpixels = healpixels
 
@@ -131,8 +135,9 @@ f.write(commandline+'\n')
 
 # For each healpix in inputhealpixels, identify the coadd data
 # and run desibalfilder
-for healpix in inputhealpixels: 
 # for healpix in ['11195']: 
+for healpix in inputhealpixels: 
+    skiphealpix = False
     coaddfilename = "coadd-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
     balfilename = coaddfilename.replace('coadd-', 'baltable-')
 
@@ -141,21 +146,33 @@ for healpix in inputhealpixels:
 
     coaddfile = os.path.join(indir, coaddfilename) 
     balfile = os.path.join(outdir, balfilename) 
+    zfile = balfile.replace('baltable-', zfileroot+"-")
 
     if args.altzdir is not None: 
         if zfileroot is None:
             zfileroot = 'redrock'
         altzdir = os.path.join(args.altzdir, 'healpix', args.survey, args.moon, healpix[:len(healpix)-2], healpix) 
 
+    # Check to see if zfile exists -- if not, skip
+    if not os.path.isfile(zfile): 
+        skiphealpix = True
+
     if args.verbose:
         print("Coadd file: ", coaddfile)
         print("BAL file: ", balfile)
         if args.altzdir is not None: 
             print("Redshift directory: ", altzdir)
+        if skiphealpix: 
+            print("Did not find {0}, so skipping healpix {1}".format(zfile, healpix))
 
     if not os.path.isfile(balfile) or args.clobber:
         try:
-            db.desibalfinder(coaddfile, altbaldir=outdir, altzdir=altzdir, zfileroot=zfileroot, overwrite=args.clobber, verbose=args.verbose, release=args.release)
+            if not skiphealpix: 
+                db.desibalfinder(coaddfile, altbaldir=outdir, altzdir=altzdir, zfileroot=zfileroot, overwrite=args.clobber, verbose=args.verbose, release=args.release)
+            else: 
+                errortype = "Did not find redshift catalog {0}".format(zfile)
+                issuehealpixels.append(healpix)
+                errortypes.append(errortype)
         except:
             print("An error occured at healpix {}. Adding healpix to issuehealpixels list.".format(healpix))
             errortype = sys.exc_info()[0]
