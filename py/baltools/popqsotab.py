@@ -104,8 +104,11 @@ def inittab(qsocatpath, outtab):
 
     # Check if strings have been turned into character arrays, and if so read the catalog with fitsio instead
     # This is necessary for fuji and guadalupe
-    if cathdu[1].data['SURVEY'].dtype == 'O':
-        cathdu[1].data = fitsio.read(qsocatpath) 
+    try: 
+        if cathdu[1].data['SURVEY'].dtype == 'O':
+            cathdu[1].data = fitsio.read(qsocatpath) 
+    except KeyError:
+        print(f"Warning: no SURVEY data column in {qsocatpath}")
     
     # PCA Fit Coefficients and chisq result
     pca_array = np.zeros([NROWS, bc.NPCA], dtype=float)  # PCA Fit Coefficients

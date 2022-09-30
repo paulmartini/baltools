@@ -63,6 +63,9 @@ parser.add_argument('-s', '--survey', type = str, default = 'main', required = F
 parser.add_argument('-m', '--moon', type = str, default = 'dark', required = False,
                     help = 'Moon brightness [bright, dark], default is dark')
 
+parser.add_argument('--mock', type = bool, default=False, required = False,
+                    help = 'Mock catalog?, default is False') 
+
 parser.add_argument('-l','--logfile', type = str, default = 'logfile-{survey}-{moon}.txt', required = False,
                     help = 'Name of log file written to outdir, default is logfile-{survey}-{moon}.txt')
 
@@ -94,7 +97,10 @@ qhdu = fits.open(outcat)
 qcat = qhdu[1].data
 
 # Calculate healpix for every QSO 
-healpixels = hp.ang2pix(64, qcat['TARGET_RA'], qcat['TARGET_DEC'], lonlat=True, nest=True)
+if args.mock: 
+    healpixels = hp.ang2pix(16, qcat['RA'], qcat['DEC'], lonlat=True, nest=True)
+else: 
+    healpixels = hp.ang2pix(64, qcat['TARGET_RA'], qcat['TARGET_DEC'], lonlat=True, nest=True)
 
 # Construct a list of unique healpix pixels
 healpixlist = np.unique(healpixels)
@@ -106,7 +112,11 @@ if args.verbose:
     print("Found {0} entries with {1} unique healpix".format(len(healpixels), len(healpixlist)))
 
 # logfile = os.path.join(args.baldir, args.logfile) 
-logfile = os.path.join(args.baldir, "logfile-{0}-{1}.txt".format(args.survey, args.moon))
+if args.mock: 
+    logfile = os.path.join(args.baldir, "logfile-mock.txt")
+else: 
+    logfile = os.path.join(args.baldir, "logfile-{0}-{1}.txt".format(args.survey, args.moon))
+
 f = open(logfile, 'a')
 try:
     lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
@@ -127,8 +137,12 @@ f.write(outstr)
 
 for healpix in healpixlist: 
     nmatch = 0
-    balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
-    balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix), balfilename)
+    if args.mock: 
+        balfilename = "baltable-16-{0}.fits".format(healpix) 
+        balfile = os.path.join(args.baldir, balfilename)
+    else: 
+        balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
+        balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix), balfilename)
     try: 
         bhdu = fits.open(balfile) 
     except FileNotFoundError:
