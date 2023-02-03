@@ -25,6 +25,7 @@ import baltools
 from baltools import balconfig as bc
 from baltools import plotter, fitbal, baltable
 from baltools import desibal as db
+from baltools import utils
 
 from multiprocessing import Pool
 
@@ -85,7 +86,7 @@ def main(args=None):
         
     # Root directory for output catalogs: 
     outroot = os.path.join(args.outdir, "healpix", args.survey, args.moon)
-    pmmkdir(outroot)
+    utils.pmmkdir(outroot)
     
     # All possible healpix --
     healpixdirs = glob(dataroot + "/*/*")
@@ -95,10 +96,6 @@ def main(args=None):
     
     # Requested healpix
     inputhealpixels = args.healpix
-    
-#    if args.verbose: 
-#        print("args.healpix = ", inputhealpixels) 
-#        print("healpixels: ", healpixels)
     
     zfileroot = args.zfileroot
     altzdir = None
@@ -112,8 +109,9 @@ def main(args=None):
     
     # Create/confirm output healpix directories exist
     for inputhealpixel in inputhealpixels: 
-        healpixdir = os.path.join(outroot, inputhealpixel[:len(inputhealpixel)-2], inputhealpixel) 
-        pmmkdir(healpixdir) 
+        hpdir = utils.gethpdir(inputhealpixel)
+        healpixdir = os.path.join(outroot, hpdir, inputhealpixel) 
+        utils.pmmkdir(healpixdir) 
     
     # List of healpix that caused issues for by hand rerun.
     issuehealpixels = []
@@ -177,8 +175,9 @@ def findbals_one_healpix(healpix, args, healpixels, dataroot, outroot):
     coaddfilename = "coadd-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
     balfilename = coaddfilename.replace('coadd-', 'baltable-')
 
-    indir = os.path.join(dataroot, healpix[:len(healpix)-2], healpix)
-    outdir = os.path.join(outroot, healpix[:len(healpix)-2], healpix)
+    hpdir = utils.gethpdir(healpix) 
+    indir = os.path.join(dataroot, hpdir, healpix)
+    outdir = os.path.join(outroot, hpdir, healpix)
 
     coaddfile = os.path.join(indir, coaddfilename) 
     balfile = os.path.join(outdir, balfilename) 
@@ -187,7 +186,7 @@ def findbals_one_healpix(healpix, args, healpixels, dataroot, outroot):
     if args.altzdir is not None: 
         if args.zfileroot is None:
             zfileroot = 'redrock'
-        altzdir = os.path.join(args.altzdir, 'healpix', args.survey, args.moon, healpix[:len(healpix)-2], healpix) 
+        altzdir = os.path.join(args.altzdir, 'healpix', args.survey, args.moon, hpdir, healpix) 
 
     # Check to see if zfile exists -- if not, skip
     if not os.path.isfile(zfile): 
@@ -218,13 +217,6 @@ def findbals_one_healpix(healpix, args, healpixels, dataroot, outroot):
 
     return healpix, errortype
 
-def pmmkdir(direct): 
-    if not os.path.isdir(direct):
-        try:
-            os.makedirs(direct)
-        except PermissionError:
-            print("Error: no permission to make directory ", direct)
-            exit(1)
 
 if __name__ == "__main__":
     main()

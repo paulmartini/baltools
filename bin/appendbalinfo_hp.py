@@ -24,16 +24,8 @@ from time import gmtime, strftime
 from baltools import balconfig as bc
 # from baltools import fitbal
 from baltools import popqsotab as pt
+from baltools import utils
 
-
-def pmmkdir(direct): 
-    if not os.path.isdir(direct):
-        try:
-            print(direct, "not found. Making new directory.")
-            os.makedirs(direct)
-        except PermissionError:
-            print("Error: no permission to make directory ", direct)
-            exit(1)
 
 balcols = ['PCA_COEFFS', 'PCA_CHI2', 'BAL_PROB', 'BI_CIV', 'ERR_BI_CIV', 'NCIV_2000', 'VMIN_CIV_2000', 'VMAX_CIV_2000', 'POSMIN_CIV_2000', 'FMIN_CIV_2000', 'AI_CIV', 'ERR_AI_CIV', 'NCIV_450', 'VMIN_CIV_450', 'VMAX_CIV_450', 'POSMIN_CIV_450', 'FMIN_CIV_450', 'BI_SIIV', 'ERR_BI_SIIV', 'NSIIV_2000', 'VMIN_SIIV_2000', 'VMAX_SIIV_2000', 'POSMIN_SIIV_2000', 'FMIN_SIIV_2000', 'AI_SIIV', 'ERR_AI_SIIV', 'NSIIV_450', 'VMIN_SIIV_450', 'VMAX_SIIV_450', 'POSMIN_SIIV_450', 'FMIN_SIIV_450']
 
@@ -137,12 +129,13 @@ f.write(outstr)
 
 for healpix in healpixlist: 
     nmatch = 0
+    hpdir = utils.gethpdir(str(healpix))
     if args.mock: 
         balfilename = "baltable-16-{0}.fits".format(healpix) 
         balfile = os.path.join(args.baldir, balfilename)
     else: 
         balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
-        balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix), balfilename)
+        balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, hpdir, str(healpix), balfilename)
     try: 
         bhdu = fits.open(balfile) 
     except FileNotFoundError:

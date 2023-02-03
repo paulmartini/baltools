@@ -20,15 +20,8 @@ from time import gmtime, strftime
 
 from baltools import balconfig as bc
 from baltools import popqsotab as pt
+from baltools import utils
 
-def pmmkdir(direct): 
-    if not os.path.isdir(direct):
-        try:
-            print(direct, "not found. Making new directory.")
-            os.makedirs(direct)
-        except PermissionError:
-            print("Error: no permission to make directory ", direct)
-            exit(1)
 
 balcols = ['PCA_COEFFS', 'PCA_CHI2', 'BAL_PROB', 'BI_CIV', 'ERR_BI_CIV', 'NCIV_2000', 'VMIN_CIV_2000', 'VMAX_CIV_2000', 'POSMIN_CIV_2000', 'FMIN_CIV_2000', 'AI_CIV', 'ERR_AI_CIV', 'NCIV_450', 'VMIN_CIV_450', 'VMAX_CIV_450', 'POSMIN_CIV_450', 'FMIN_CIV_450', 'BI_SIIV', 'ERR_BI_SIIV', 'NSIIV_2000', 'VMIN_SIIV_2000', 'VMAX_SIIV_2000', 'POSMIN_SIIV_2000', 'FMIN_SIIV_2000', 'AI_SIIV', 'ERR_AI_SIIV', 'NSIIV_450', 'VMIN_SIIV_450', 'VMAX_SIIV_450', 'POSMIN_SIIV_450', 'FMIN_SIIV_450']
 
@@ -124,12 +117,11 @@ outstr = "Healpix NQSOs Nmatches \n"
 f.write(outstr)
 
 for healpix in healpixlist: 
+    hpdir = utils.gethpdir(str(healpix))
     zfilename = "{0}-{1}-{2}-{3}.fits".format(args.zfileroot, args.survey, args.moon, healpix) 
-    zdir = os.path.join(args.altzdir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix))
-    pmmkdir(zdir) 
-    zfile = os.path.join(args.altzdir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix), zfilename)
-    # bhdu = fits.open(balfile) 
-    # bcat = bhdu['BALCAT'].data
+    zdir = os.path.join(args.altzdir, "healpix", args.survey, args.moon, hpdir, str(healpix))
+    utils.pmmkdir(zdir) 
+    zfile = os.path.join(args.altzdir, "healpix", args.survey, args.moon, hpdir, str(healpix), zfilename)
      
     # Check if the file already exists
     if os.path.isfile(zfile) and args.clobber == False:
