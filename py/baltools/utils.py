@@ -45,6 +45,21 @@ def zeropad(input, N=4):
         output = str(input)
     return output
 
+def gethpdir(healpix):
+    '''
+    Correctly parse a healpix to parent directory in the format
+        .../hpdir/healpix/...
+    where healpix is a string
+    '''
+    print(healpix, len(healpix))
+    if len(healpix) < 3:
+        hpdir = '0'
+    elif len(healpix) == 4:
+        hpdir = healpix[0]
+    else:
+        hpdir = healpix[:len(healpix)-2]
+    return hpdir
+
 
 def getdr12spec(array, verbose=False):
     '''
