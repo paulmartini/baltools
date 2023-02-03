@@ -16,6 +16,7 @@ These tools include dependencies to several DESI packages, and it should be most
 To install, clone the repository, add the "py" directory to your $PYTHONPATH, and the "bin" directory to your $PATH. 
 
 Note the code expects that you have a directory called "Catalogs/" in your home directory that contains the file PCA_Eigenvectors.fits that is in the data/ directory of this repository.
+The file PCA_Eigenvectors_Brodzeller.fits is also required if using alternate templates made by Allyson Brodzeller.
 
 Getting Started
 ---------------

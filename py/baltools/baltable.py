@@ -98,8 +98,8 @@ def cattobalinfo(array):
 #
 # ------------ DESI routines ---------------
 #
-
-def initbaltab_desi(specdata, zdata, outputfile, npca=4, overwrite=False, release=None):
+### Added argument npca. -Karish
+def initbaltab_desi(specdata, zdata, outputfile, npca=5, overwrite=False, release=None):
     '''
     Create an empty BAL table from a QSO catalog
     This should just include QSOs in the BAL redshift range
