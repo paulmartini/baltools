@@ -55,7 +55,7 @@ parser.add_argument('-b','--baldir', type=str, default = None, required=True,
                     help='Path to directory structure with individual BAL catalogs')
 
 parser.add_argument('-o','--outcatfile', type=str, default="qso-balcat.fits", 
-                    required=False, help='Filename of output QSO+BAL catalog')
+                    required=False, help='Output QSO+BAL catalog')
 
 parser.add_argument('-s', '--survey', type = str, default = 'main', required = False,
                     help = 'Survey subdirectory [sv1, sv2, sv3, main], default is main')
@@ -85,7 +85,7 @@ if not os.path.isfile(args.qsocat):
     
     
 # Full path to the output QSO+BAL catalog
-outcat = os.path.join(args.baldir, args.outcatfile) 
+outcat = os.path.join(args.outcatfile) 
 
 # Add empty BAL cols to qso cat and writes to outcat.
 # Stores return value (BAL card names) in cols

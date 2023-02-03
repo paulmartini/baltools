@@ -103,7 +103,20 @@ if args.verbose:
 # logfile = os.path.join(args.baldir, args.logfile) 
 logfile = os.path.join(args.altzdir, "logfile-{0}-{1}.txt".format(args.survey, args.moon))
 f = open(logfile, 'a')
-lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+try:
+    lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+except:
+    try:
+        lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('USER'))
+    except:
+        try:
+            lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('LOGNAME'))
+        except:
+            print("Error with tagging log file")
+            lastupdate = "Last updated {0} UT \n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()))
+
+# lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+
 commandline = " ".join(sys.argv)
 f.write(lastupdate)
 f.write(commandline+'\n')
@@ -146,6 +159,7 @@ for healpix in healpixlist:
     # print(np.where(col6['SPECTYPE'] != 'QSO') )
 
     ztabhdu = fits.BinTableHDU.from_columns([col0, col1, col2, col3, col4, col5, col6])
+    # ztabhdu = fits.BinTableHDU.from_columns([col0, col1, col2, col3])
     ztabhdu.header['EXTNAME'] = 'REDSHIFTS'
 
     ztabhdu.writeto(zfile, overwrite=args.clobber)  
