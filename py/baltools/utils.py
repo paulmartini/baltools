@@ -61,6 +61,19 @@ def gethpdir(healpix):
     return hpdir
 
 
+def pmmkdir(direct):
+    '''
+    Create a new directory, capture permissions issues
+    '''
+    if not os.path.isdir(direct):
+        try:
+            print(direct, "not found. Making new directory.")
+            os.makedirs(direct)
+        except PermissionError:
+            print("Error: no permission to make directory ", direct)
+            exit(1)
+
+
 def getdr12spec(array, verbose=False):
     '''
     Return the HDU associated with QSO described with array
