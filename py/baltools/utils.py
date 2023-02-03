@@ -51,7 +51,6 @@ def gethpdir(healpix):
         .../hpdir/healpix/...
     where healpix is a string
     '''
-    print(healpix, len(healpix))
     if len(healpix) < 3:
         hpdir = '0'
     elif len(healpix) == 4:
