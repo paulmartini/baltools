@@ -72,6 +72,10 @@ parser.add_argument('-c','--clobber', type = bool, default=False, required=False
 parser.add_argument('-v','--verbose', type = bool, default = False, required = False,
                     help = 'Provide verbose output?')
 
+# Added argument to use Brodzeller components
+parser.add_argument('-a','--alttemp', type = bool, default = False, required = False,
+                    help = 'Use alternate components made by Allyson Brodzeller')
+
 
 args  = parser.parse_args()
 
@@ -138,7 +142,7 @@ for tile in inputtiles:
 
             if not os.path.isfile(balfilename) or args.clobber: 
                 try:
-                    db.desibalfinder(coaddfile, altbaldir=outdatedir, overwrite=args.clobber, verbose=True, release=release)
+                    db.desibalfinder(coaddfile, altbaldir=outdatedir, overwrite=args.clobber, verbose=True, release=release, alttemp=args.alttemp)
                 except:
                     print("An error occured at tile {}. Adding tile to issuetiles list.".format(tile))
                     errorytpe = sys.exc_info()[0]

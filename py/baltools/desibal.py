@@ -26,7 +26,8 @@ from baltools import balconfig as bc
 from baltools import baltable
 import getpass
 
-def desibalfinder(specfilename, altbaldir=None, altzdir=None, zfileroot='zbest', overwrite=True, verbose=False, release=None, format='healpix'): 
+### Added an optional argument alttemp to this function
+def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfileroot='zbest', overwrite=True, verbose=False, release=None, format='healpix'): 
     '''
     Find BALs in DESI quasars
     1. Identify all objects classified as quasars that are in the redshift
@@ -38,6 +39,8 @@ def desibalfinder(specfilename, altbaldir=None, altzdir=None, zfileroot='zbest',
     ----------
     specfilename : filename
         FITS file with DESI spectra
+    alttemp : bool, optional
+        Use Allyson Brozeller's optional alternate templates
     altbaldir : string, optional
         alternate output directory for catalog (default is None)
     altzdir : string, optional
@@ -159,14 +162,18 @@ def desibalfinder(specfilename, altbaldir=None, altzdir=None, zfileroot='zbest',
             tid = zs['TARGETID'][zindx]
             qindx = np.where(tid == fm['TARGETID'])[0][0]
             qsos.append(qindx)
+            
+    # Read in the eigenspectra 
+    ### This has been changed to allow new components
+    if alttemp:
+        pcaeigen = fitsio.read(os.environ['HOME'] + '/Catalogs/PCA_Eigenvectors_Brodzeller.fits')
+    else:
+        pcaeigen = fitsio.read(bc.pcaeigenfile)
 
     # Initialize the BAL table with all quasars in 'qsos'
-    baltable.initbaltab_desi(fm[qsos], zs[zqsos], balfilename, overwrite=overwrite, release=release)
+    baltable.initbaltab_desi(fm[qsos], zs[zqsos], balfilename, npca=len(pcaeigen.dtype.names)-1, overwrite=overwrite,release=release)
 
     balhdu = fits.open(balfilename) 
-
-    # Read in the eigenspectra 
-    pcaeigen = fitsio.read(bc.pcaeigenfile)
 
     # Loop through the QSOs and run the BAL finder
     for i in range(len(qsos)): 
@@ -180,7 +187,8 @@ def desibalfinder(specfilename, altbaldir=None, altzdir=None, zfileroot='zbest',
         targetid = fm['TARGETID'][qso]
         info, pcaout, mask = fitbal.calcbalparams(qsospec, pcaeigen, zspec)
         # update baltable
-        balhdu = baltable.updatebaltab_desi(targetid, balhdu, info, pcaout)
+        ### Code below has been changed to allow new argument
+        balhdu = baltable.updatebaltab_desi(targetid, balhdu, info, pcaout, npca=len(pcaeigen.dtype.names)-1)
         if verbose: 
             print("{0} Processed {1} at z = {2:.2f}: AI_CIV = {3:.0f}, BI_CIV = {4:.0f}".format(i, targetid, zspec, info['AI_CIV'], info['BI_CIV']))
 

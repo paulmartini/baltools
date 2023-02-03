@@ -230,7 +230,7 @@ def plotdesibal2(datadir, balcat, targetid, lam1=1340, lam2=1680):
     
     plotdesibal(specobj, balcat, targetid, lam1, lam2)
 
-def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680): 
+def plotdesibal(specobj, balcat, targetid, alttemp=False, lam1=1340, lam2=1680): 
     '''
     Plot spectrum of a BAL in specobj with TARGETID. 
     Wrapper for plotbal()
@@ -244,6 +244,8 @@ def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680):
         BAL catalog that corresponds to specobj
     targetid : int
         DESI TARGETID
+    alttemp : bool, optional
+        Use Allyson Brozeller's optional alternate templates
     lam1 : float, optional
         first wavelength to plot (default is 1340)
     lam2 : float, optional
@@ -263,7 +265,11 @@ def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680):
     zspec = balcat['Z'][bindx]
 
     # Read in the eigenspectra
-    pcaeigen = fitsio.read(bc.pcaeigenfile)
+    ### This has been changed to allow new components
+    if alttemp:
+        pcaeigen = fitsio.read(os.environ['HOME'] + '/Catalogs/PCA_Eigenvectors_Brodzeller.fits')
+    else:
+        pcaeigen = fitsio.read(bc.pcaeigenfile)
 
     # Create the spectrum for the figure: 
     if 'brz' in specobj.wave.keys():

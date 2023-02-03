@@ -558,11 +558,12 @@ def createpcatemplate(pcaeigen, pcacoeffs):
     outspec : 1-d float array
         PCA model
     '''
-    outspec = pcacoeffs[0]*pcaeigen['PCA0'] + \
-        pcacoeffs[1]*pcaeigen['PCA1'] + \
-        pcacoeffs[2]*pcaeigen['PCA2'] + \
-        pcacoeffs[3]*pcaeigen['PCA3'] + \
-        pcacoeffs[4]*pcaeigen['PCA4']
+    ### Modified pcacoeffs that allows alternate templates
+    ### Replaces hardcoded array
+    outspec = 0
+    for index,item in enumerate(pcaeigen.dtype.names):
+        if item == 'WAVE' : continue
+        outspec = outspec + pcacoeffs[index-1]*pcaeigen[item]
     return outspec
 
 
@@ -709,14 +710,15 @@ def fitpca(idata, zspec, ipca, mmask):
     pcadata : 1-d float array
         array of NPCA PCA coefficients + 2 chisq values
     '''
-
-    x0 = np.ones(bc.NPCA) 
+    
+    ### Replaces hardcoded NPCA
+    x0 = np.ones(len(ipca)) 
 
     balspec = idata[1]
     balerror = idata[2]
     def chisqfunc(alpha):
         m_lambda = np.zeros(len(balspec), dtype=float)
-        for i in range(bc.NPCA): 
+        for i in range(len(ipca)): 
             m_lambda += alpha[i]*ipca[i] 
         chisq = np.sum(((m_lambda[mmask] - balspec[mmask])/balerror[mmask])**2)
         return chisq
@@ -831,11 +833,11 @@ def calcbalparams(qsospec, pcaeigen, zspec, maxiter=10, verbose=False):
         raise RuntimeError("Spectrum does not extend blue enough to include the CIV line")
 
     # Interpolate the PCA components onto the rest wavelength values
-    pca0 = np.interp(wave_rest, pcaeigen['WAVE'], pcaeigen['PCA0']) 
-    pca1 = np.interp(wave_rest, pcaeigen['WAVE'], pcaeigen['PCA1']) 
-    pca2 = np.interp(wave_rest, pcaeigen['WAVE'], pcaeigen['PCA2']) 
-    pca3 = np.interp(wave_rest, pcaeigen['WAVE'], pcaeigen['PCA3']) 
-    pca4 = np.interp(wave_rest, pcaeigen['WAVE'], pcaeigen['PCA4']) 
+    ### Code changes to replace hardcoded array
+    pca_eigen = []
+    for item in pcaeigen.dtype.names:
+        if item == 'WAVE' : continue
+        pca_eigen.append(np.interp(wave_rest, pcaeigen['WAVE'], pcaeigen[item]))
     
     # index of shortest wavelength will be the wavelength of either 
     # bc.BAL_LAMBDA_MIN or wave_rest[0]
@@ -849,9 +851,11 @@ def calcbalparams(qsospec, pcaeigen, zspec, maxiter=10, verbose=False):
     if bc.BAL_LAMBDA_MAX < wave_rest[-1]:
         indx2 = find_nearest(wave_rest, bc.BAL_LAMBDA_MAX) - 1
 
-    # 2-D array with interpolated PCA components 
-    ipca = np.array([pca0[indx1:indx2], pca1[indx1:indx2], pca2[indx1:indx2], 
-                     pca3[indx1:indx2], pca4[indx1:indx2]]) 
+    ### 2-D array with interpolated PCA components that replaces the hardcoded components
+    temp_pca = []
+    for item in pca_eigen:
+        temp_pca.append(item[indx1:indx2])
+    ipca = np.concatenate(temp_pca,axis=0).reshape(len(temp_pca),len(temp_pca[0]))
 
     # data over the same range 
     balwave = wave_rest[indx1:indx2]
@@ -872,7 +876,8 @@ def calcbalparams(qsospec, pcaeigen, zspec, maxiter=10, verbose=False):
     while (itr < maxiter):
         # Fit for the PCA coefficients
         calcpcaout = fitpca(idata, zspec, ipca, calcmask)
-        calcpcacoeffs = calcpcaout[:bc.NPCA]
+        ### Modified to allow different numbers of PCA components
+        calcpcacoeffs = calcpcaout[:len(ipca)]
         calcmodel = np.zeros(len(balwave), dtype=float)
         for i in range(len(calcpcacoeffs)):
             calcmodel += calcpcacoeffs[i]*ipca[i] 
@@ -896,7 +901,8 @@ def calcbalparams(qsospec, pcaeigen, zspec, maxiter=10, verbose=False):
     else: 
         sdsschi2 = 999.
     calcpcaout = np.append(calcpcaout, [sdsschi2])
-
+    
+    ### THE CODE BELOW STILL NEEDS TO BE CHANGED FOR SDSS DATA
     if calcpcaout[-2] > 1.5*sdsschi2: 
         calcinfo = calculatebalinfo(idata, qsospec['model'][indx1:indx2])
         calcmask = baltomask(calcinfo, balwave)

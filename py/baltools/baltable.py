@@ -99,7 +99,7 @@ def cattobalinfo(array):
 # ------------ DESI routines ---------------
 #
 
-def initbaltab_desi(specdata, zdata, outputfile, overwrite=False, release=None):
+def initbaltab_desi(specdata, zdata, outputfile, npca=4, overwrite=False, release=None):
     '''
     Create an empty BAL table from a QSO catalog
     This should just include QSOs in the BAL redshift range
@@ -114,6 +114,8 @@ def initbaltab_desi(specdata, zdata, outputfile, overwrite=False, release=None):
         name to use for output BAL catalog file
     release : string
         name of the data release that data comes from
+    npca : int
+        The number of PCA components
 
     Returns
     -------
@@ -149,8 +151,9 @@ def initbaltab_desi(specdata, zdata, outputfile, overwrite=False, release=None):
     col9 = fits.Column(name='ZWARN', format='E', array=zdata['ZWARN'])
 
     # PCA Fit Coefficients and chisq result
-    pca_array = np.zeros([NROWS, bc.NPCA], dtype=float)  # PCA Fit Coefficients
-    col10 = fits.Column(name='PCA_COEFFS', format='5E', array=pca_array)
+    ### THIS GOT CHANGED
+    pca_array = np.zeros([NROWS, npca], dtype=float)  # PCA Fit Coefficients
+    col10 = fits.Column(name='PCA_COEFFS', format= str(npca)+'E', array=pca_array)
     pca_chi2 = np.zeros([NROWS], dtype=float)  # PCA reduced chi2
     col11 = fits.Column(name='PCA_CHI2', format='E', array=pca_chi2)
 
@@ -214,7 +217,7 @@ def initbaltab_desi(specdata, zdata, outputfile, overwrite=False, release=None):
     tabhdu.writeto(outputfile, overwrite=overwrite)
 
 
-def updatebaltab_desi(targetid, balhdu, info, pcaout):
+def updatebaltab_desi(targetid, balhdu, info, pcaout, npca=5):
     '''
     Add information about QSO with targetid to baltab
 
@@ -228,6 +231,8 @@ def updatebaltab_desi(targetid, balhdu, info, pcaout):
         output from fitbal.calcbalparams
     pcaout : 1-D float array
         output from fitbal.fitpca
+    npca : int
+        The number of PCA components
 
     Returns
     -------
@@ -239,7 +244,7 @@ def updatebaltab_desi(targetid, balhdu, info, pcaout):
     # qindx = fitbal.qsocatsearch(balhdu[1].data, dssname)
     qindx = np.where(balhdu[1].data['TARGETID'] == targetid)[0][0]
 
-    balhdu[1].data[qindx]['PCA_COEFFS'] = pcaout[:bc.NPCA]
+    balhdu[1].data[qindx]['PCA_COEFFS'] = pcaout[:npca]
     balhdu[1].data[qindx]['PCA_CHI2'] = pcaout[-2]
     # balhdu[1].data[qindx]['SDSS_CHI2'] = pcaout[-1]
 
