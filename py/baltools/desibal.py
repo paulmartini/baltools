@@ -123,7 +123,8 @@ def desibalfinder(specfilename, altbaldir=None, altzdir=None, zfileroot='zbest',
             
     zs = fitsio.read(zfilename)
 
-    print("Read file {}".format(zfilename))
+    if verbose: 
+        print("Read file {}".format(zfilename))
 
     # Identify the spectra classified as quasars based on zs and within 
     # the nominal redshift range for BALs
@@ -195,5 +196,7 @@ def desibalfinder(specfilename, altbaldir=None, altzdir=None, zfileroot='zbest',
     lastupdate = "Last updated {0} UT by {1}".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), getpass.getuser())
     fits.setval(balfilename, 'HISTORY', value=lastupdate, ext=1)
     balhdu.close() 
+    del balhdu
+    del qsospec
     del specobj
 
