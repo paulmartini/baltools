@@ -149,12 +149,16 @@ for healpix in healpixlist:
 
     if args.verbose: 
         print("Processing: ", healpix, balfile) 
+
     indxs = hindxs[hmask] # indices in qcat that are in pixel healpix
+    targids = qcat['TARGETID'][hmask] # targetids of quasars in pixel healpix, same order
+
     for i, targetid in enumerate(bhdu['BALCAT'].data['TARGETID']):
-        ind = np.where(targetid == qcat['TARGETID'])[0]
+        ind = np.where(targetid == targids)[0]
         if len(ind) > 0:
+            qindex = indxs[ind[0]]
             nmatch += 1
-            balcopy(qcat[ind[0]], bhdu['BALCAT'].data[i])
+            balcopy(qcat[qindex], bhdu['BALCAT'].data[i])
             # print(i, targetid, qcat['TARGETID'][ind[0]], qcat['Z'][ind[0]], ind[0], qcat['BALMASK'][ind[0]], qcat['BI_CIV'][ind[0]])
     f.write("{0}: {1} {2}\n".format(balfilename, len(bcat), nmatch) )
 
