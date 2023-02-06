@@ -195,7 +195,6 @@ def findbals_one_healpix(healpix, args, healpixels, dataroot, outroot):
     if args.verbose:
         print("Coadd file: ", coaddfile)
         print("BAL file: ", balfile)
-        print("zfileroot: ", args.zfileroot)
         if args.altzdir is not None: 
             print("Redshift directory: ", altzdir)
         if skiphealpix: 
