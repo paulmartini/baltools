@@ -46,6 +46,36 @@ def zeropad(input, N=4):
     return output
 
 
+def gethpdir(healpix):
+    '''
+    Correctly parse a healpix to parent directory in the format
+        .../hpdir/healpix/...
+    where healpix is a string
+    '''
+    if len(healpix) < 3:
+        hpdir = '0'
+    elif len(healpix) == 3:
+        hpdir = healpix[0]
+    elif len(healpix) == 4:
+        hpdir = healpix[0:2]
+    else:
+        hpdir = healpix[:len(healpix)-2]
+    return hpdir
+
+
+def pmmkdir(direct):
+    '''
+    Create a new directory, capture permissions issues
+    '''
+    if not os.path.isdir(direct):
+        try:
+            print(direct, "not found. Making new directory.")
+            os.makedirs(direct)
+        except PermissionError:
+            print("Error: no permission to make directory ", direct)
+            exit(1)
+
+
 def getdr12spec(array, verbose=False):
     '''
     Return the HDU associated with QSO described with array
