@@ -171,7 +171,7 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
         pcaeigen = fitsio.read(bc.pcaeigenfile)
 
     # Initialize the BAL table with all quasars in 'qsos'
-    baltable.initbaltab_desi(fm[qsos], zs[zqsos], balfilename, npca=len(pcaeigen.dtype.names)-1, overwrite=overwrite,release=release)
+    baltable.initbaltab_desi(fm[qsos], zs[zqsos], balfilename, pcaeigen, overwrite=overwrite,release=release)
 
     balhdu = fits.open(balfilename) 
 
@@ -188,7 +188,7 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
         info, pcaout, mask = fitbal.calcbalparams(qsospec, pcaeigen, zspec)
         # update baltable
         ### Code below has been changed to allow new argument
-        balhdu = baltable.updatebaltab_desi(targetid, balhdu, info, pcaout, npca=len(pcaeigen.dtype.names)-1)
+        balhdu = baltable.updatebaltab_desi(targetid, balhdu, info, pcaout, pcaeigen)
         if verbose: 
             print("{0} Processed {1} at z = {2:.2f}: AI_CIV = {3:.0f}, BI_CIV = {4:.0f}".format(i, targetid, zspec, info['AI_CIV'], info['BI_CIV']))
 
