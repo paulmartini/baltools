@@ -72,10 +72,8 @@ parser.add_argument('-c','--clobber', type = bool, default=False, required=False
 parser.add_argument('-v','--verbose', type = bool, default = False, required = False,
                     help = 'Provide verbose output?')
 
-# Added argument to use Brodzeller components
-parser.add_argument('-a','--alttemp', type = bool, default = False, required = False,
+parser.add_argument('-t','--alttemp', default=False, required=False, action='store_true',
                     help = 'Use alternate components made by Allyson Brodzeller')
-
 
 args  = parser.parse_args()
 
