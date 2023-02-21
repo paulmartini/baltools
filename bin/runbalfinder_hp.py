@@ -71,6 +71,9 @@ parser.add_argument('-c','--clobber', default=False, required=False, action='sto
 parser.add_argument('-v','--verbose', default=False, required=False, action='store_true',
                     help = 'Provide verbose output?')
 
+parser.add_argument('-t','--alttemp', default=False, required=False, action='store_true',
+                    help = 'Use alternate components made by Allyson Brodzeller')
+
 args  = parser.parse_args()
 
 if debug: 
@@ -168,7 +171,7 @@ for healpix in inputhealpixels:
     if not os.path.isfile(balfile) or args.clobber:
         try:
             if not skiphealpix: 
-                db.desibalfinder(coaddfile, altbaldir=outdir, altzdir=altzdir, zfileroot=zfileroot, overwrite=args.clobber, verbose=args.verbose, release=args.release)
+                db.desibalfinder(coaddfile, altbaldir=outdir, altzdir=altzdir, zfileroot=zfileroot, overwrite=args.clobber, verbose=args.verbose, release=args.release, alttemp=args.alttemp)
             else: 
                 errortype = "Did not find redshift catalog {0}".format(zfile)
                 issuehealpixels.append(healpix)
