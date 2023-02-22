@@ -201,3 +201,11 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
     lastupdate = "Last updated {0} UT by {1}".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), getpass.getuser())
     fits.setval(balfilename, 'HISTORY', value=lastupdate, ext=1)
 
+    if alttemp:
+        balcatname = os.environ['HOME'] + '/Catalogs/PCA_Eigenvectors_Brodzeller.fits'
+    else:
+        balcatname = bc.pcaeigenfile
+    fits.setval(balfilename, 'QSOTEMPS', value=balcatname, ext=1)
+
+   
+    
