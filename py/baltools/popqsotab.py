@@ -79,7 +79,7 @@ def concatbaltabs(rootbaldir, outtab):
         
 
 
-def inittab(qsocatpath, outtab):
+def inittab(qsocatpath, outtab, alttemp=False):
     '''
     Populate table with information from QSO catalogue,
     make empty tables for BAL information to be added later.
@@ -90,6 +90,8 @@ def inittab(qsocatpath, outtab):
         QSO catalogue to be read.
     outtab  : fits file
         where to write resulting catalogue to.
+    alttemp : bool
+        use alternate (Brodzeller) templates? (default False) 
 
     Returns
     -------
@@ -111,8 +113,13 @@ def inittab(qsocatpath, outtab):
         print(f"Warning: no SURVEY data column in {qsocatpath}")
     
     # PCA Fit Coefficients and chisq result
-    pca_array = np.zeros([NROWS, bc.NPCA], dtype=float)  # PCA Fit Coefficients
-    col0 = fits.Column(name='PCA_COEFFS', format='5E', array=pca_array)
+    if alttemp: 
+        pca_array = np.zeros([NROWS, 4], dtype=float)  # PCA Fit Coefficients
+        col0 = fits.Column(name='PCA_COEFFS', format='4E', array=pca_array)
+    else: 
+        pca_array = np.zeros([NROWS, bc.NPCA], dtype=float)  # PCA Fit Coefficients
+        col0 = fits.Column(name='PCA_COEFFS', format='5E', array=pca_array)
+
     pca_chi2 = np.zeros([NROWS], dtype=float)  # PCA reduced chi2
     col1 = fits.Column(name='PCA_CHI2', format='E', array=pca_chi2)
 

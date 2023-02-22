@@ -75,6 +75,8 @@ parser.add_argument('-c','--clobber', default=False, required=False, action='sto
 parser.add_argument('-v','--verbose', default=False, required=False, action='store_true', 
                     help = 'Provide verbose output?')
 
+parser.add_argument('-t','--alttemp', default=False, required=False, action='store_true',
+                    help = 'Use alternate components made by Allyson Brodzeller')
 
 args  = parser.parse_args()
 
@@ -89,7 +91,7 @@ outcat = os.path.join(args.baldir, args.outcatfile)
 
 # Add empty BAL cols to qso cat and writes to outcat.
 # Stores return value (BAL card names) in cols
-cols = pt.inittab(args.qsocat, outcat)
+cols = pt.inittab(args.qsocat, outcat, alttemp=args.alttemp)
 # # Want to manually set this to -1 to show that it is not populated
 # cols.remove('BAL_PROB')
 
