@@ -68,6 +68,9 @@ def parse(options=None):
     parser.add_argument('-v','--verbose', default=False, required=False, action='store_true',
                     help = 'Provide verbose output?')
 
+    parser.add_argument('-t','--alttemp', default=False, required=False, action='store_true',
+                    help = 'Use alternate components made by Allyson Brodzeller')
+
     if options is None: 
         args  = parser.parse_args()
     else: 
@@ -205,7 +208,7 @@ def findbals_one_healpix(healpix, args, healpixels, dataroot, outroot):
         try:
             if not skiphealpix: 
                 print(f"About to run db.desibalfinder with verbose={args.verbose} and altbaldir={outdir} and zfileroot={args.zfileroot}") 
-                db.desibalfinder(coaddfile, altbaldir=outdir, altzdir=altzdir, zfileroot=args.zfileroot, overwrite=args.clobber, verbose=args.verbose, release=args.release)
+                db.desibalfinder(coaddfile, altbaldir=outdir, altzdir=altzdir, zfileroot=args.zfileroot, overwrite=args.clobber, verbose=args.verbose, release=args.release, alttemp=args.alttemp)
             else: 
                 errortype = "Did not find redshift catalog {0}".format(zfile)
                 # issuehealpixels.append(healpix)
