@@ -25,11 +25,6 @@ from baltools import utils
 
 balcols = ['PCA_COEFFS', 'PCA_CHI2', 'BAL_PROB', 'BI_CIV', 'ERR_BI_CIV', 'NCIV_2000', 'VMIN_CIV_2000', 'VMAX_CIV_2000', 'POSMIN_CIV_2000', 'FMIN_CIV_2000', 'AI_CIV', 'ERR_AI_CIV', 'NCIV_450', 'VMIN_CIV_450', 'VMAX_CIV_450', 'POSMIN_CIV_450', 'FMIN_CIV_450', 'BI_SIIV', 'ERR_BI_SIIV', 'NSIIV_2000', 'VMIN_SIIV_2000', 'VMAX_SIIV_2000', 'POSMIN_SIIV_2000', 'FMIN_SIIV_2000', 'AI_SIIV', 'ERR_AI_SIIV', 'NSIIV_450', 'VMIN_SIIV_450', 'VMAX_SIIV_450', 'POSMIN_SIIV_450', 'FMIN_SIIV_450']
 
-def balcopy(qinfo, binfo):
-    for balcol in balcols: 
-        qinfo[balcol] = binfo[balcol]
-    qinfo['BALMASK'] = 0
-
 
 os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
 
@@ -68,16 +63,6 @@ if not os.path.isfile(args.qsocat):
     print("Error: cannot find ", args.qsocat)
     exit(1)
     
-    
-# # Full path to the output QSO+BAL catalog
-# outcat = os.path.join(args.baldir, args.outcatfile) 
-# 
-# # Add empty BAL cols to qso cat and writes to outcat.
-# # Stores return value (BAL card names) in cols
-# cols = pt.inittab(args.qsocat, outcat)
-# # # Want to manually set this to -1 to show that it is not populated
-# # cols.remove('BAL_PROB')
- 
 qhdu = fits.open(args.qsocat)
 qcat = qhdu[1].data
 
@@ -148,10 +133,7 @@ for healpix in healpixlist:
     col5 = fits.Column(name='ZWARN', format='E', array=qcat['ZWARN'][hmask])
     col6 = fits.Column(name='SPECTYPE', format='6A', array=spectypes[hmask])
 
-    # print(np.where(col6['SPECTYPE'] != 'QSO') )
-
     ztabhdu = fits.BinTableHDU.from_columns([col0, col1, col2, col3, col4, col5, col6])
-    # ztabhdu = fits.BinTableHDU.from_columns([col0, col1, col2, col3])
     ztabhdu.header['EXTNAME'] = 'REDSHIFTS'
 
     ztabhdu.writeto(zfile, overwrite=args.clobber)  
