@@ -264,7 +264,11 @@ def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680):
     zspec = balcat['Z'][bindx]
 
     # Read in the eigenspectra
-    pcaeigen = fitsio.read(bc.pcaeigenfile)
+    ### This has been changed to allow new components
+    if len(balcat['PCA_COEFFS'][bindx]) == 5:
+        pcaeigen = fitsio.read(bc.pcaeigenfile)
+    else:
+        pcaeigen = fitsio.read(os.environ['HOME'] + '/Catalogs/PCA_Eigenvectors_Brodzeller.fits')
 
     # Create the spectrum for the figure: 
     if 'brz' in specobj.wave.keys():
