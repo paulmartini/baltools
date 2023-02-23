@@ -76,9 +76,6 @@ parser.add_argument('-t','--alttemp', default=False, required=False, action='sto
 
 args  = parser.parse_args()
 
-if debug: 
-    args.verbose=True
-    
 
 # Root directory for input data: 
 dataroot = os.path.join(os.getenv("DESI_SPECTRO_REDUX"), args.release, "healpix", args.survey, args.moon) 
@@ -171,7 +168,7 @@ for healpix in inputhealpixels:
     if not os.path.isfile(balfile) or args.clobber:
         try:
             if not skiphealpix: 
-                db.desibalfinder(coaddfile, altbaldir=outdir, altzdir=altzdir, zfileroot=zfileroot, overwrite=args.clobber, verbose=args.verbose, release=args.release, alttemp=args.alttemp)
+                db.desibalfinder(coaddfile, altbaldir=outdir, altzdir=altzdir, zfileroot=args.zfileroot, overwrite=args.clobber, verbose=args.verbose, release=args.release, alttemp=args.alttemp)
             else: 
                 errortype = "Did not find redshift catalog {0}".format(zfile)
                 issuehealpixels.append(healpix)
