@@ -148,6 +148,9 @@ def plotbalfromcat(array, lam1=1260, lam2=1680, gmflag=False, verbose=False):
     # qsospec = utils.getdr14spectra(array)
     pcaeigen = fitsio.read(bc.pcaeigenfile)
     zpca = array['Z_PCA']
+    if zpca < bc.BAL_ZMIN and array['Z'] > bc.BAL_ZMIN: 
+        zpca = array['Z']
+        print(f"Warning: Z_PCA = {array['Z_PCA']} < {bc.BAL_ZMIN} so setting Z = {array['Z']}") 
 
     fig, ax = plt.subplots(1, figsize=(12,8))
     lam_z = np.power(10, qsospec['loglam'])/(1.+zpca)
@@ -159,8 +162,6 @@ def plotbalfromcat(array, lam1=1260, lam2=1680, gmflag=False, verbose=False):
             qsospec['flux'][mm])
     ax.plot(lam_z, qsospec['model'], 'r:', label="SDSS Model") 
     ax.set_xlim(lam1, lam2)
-
-    print(qsospec['flux'][mm])
 
     try: 
         pcafit = fitbal.createpcatemplate(pcaeigen, array['PCA_COEFFS'])

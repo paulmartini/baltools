@@ -24,16 +24,8 @@ from time import gmtime, strftime
 from baltools import balconfig as bc
 # from baltools import fitbal
 from baltools import popqsotab as pt
+from baltools import utils
 
-
-def pmmkdir(direct): 
-    if not os.path.isdir(direct):
-        try:
-            print(direct, "not found. Making new directory.")
-            os.makedirs(direct)
-        except PermissionError:
-            print("Error: no permission to make directory ", direct)
-            exit(1)
 
 balcols = ['PCA_COEFFS', 'PCA_CHI2', 'BAL_PROB', 'BI_CIV', 'ERR_BI_CIV', 'NCIV_2000', 'VMIN_CIV_2000', 'VMAX_CIV_2000', 'POSMIN_CIV_2000', 'FMIN_CIV_2000', 'AI_CIV', 'ERR_AI_CIV', 'NCIV_450', 'VMIN_CIV_450', 'VMAX_CIV_450', 'POSMIN_CIV_450', 'FMIN_CIV_450', 'BI_SIIV', 'ERR_BI_SIIV', 'NSIIV_2000', 'VMIN_SIIV_2000', 'VMAX_SIIV_2000', 'POSMIN_SIIV_2000', 'FMIN_SIIV_2000', 'AI_SIIV', 'ERR_AI_SIIV', 'NSIIV_450', 'VMIN_SIIV_450', 'VMAX_SIIV_450', 'POSMIN_SIIV_450', 'FMIN_SIIV_450']
 
@@ -55,7 +47,7 @@ parser.add_argument('-b','--baldir', type=str, default = None, required=True,
                     help='Path to directory structure with individual BAL catalogs')
 
 parser.add_argument('-o','--outcatfile', type=str, default="qso-balcat.fits", 
-                    required=False, help='Filename of output QSO+BAL catalog')
+                    required=False, help='Output QSO+BAL catalog')
 
 parser.add_argument('-s', '--survey', type = str, default = 'main', required = False,
                     help = 'Survey subdirectory [sv1, sv2, sv3, main], default is main')
@@ -87,7 +79,7 @@ if not os.path.isfile(args.qsocat):
     
     
 # Full path to the output QSO+BAL catalog
-outcat = os.path.join(args.baldir, args.outcatfile) 
+outcat = os.path.join(args.outcatfile) 
 
 # Add empty BAL cols to qso cat and writes to outcat.
 # Stores return value (BAL card names) in cols
@@ -139,12 +131,13 @@ f.write(outstr)
 
 for healpix in healpixlist: 
     nmatch = 0
+    hpdir = utils.gethpdir(str(healpix))
     if args.mock: 
         balfilename = "baltable-16-{0}.fits".format(healpix) 
         balfile = os.path.join(args.baldir, balfilename)
     else: 
         balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
-        balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, str(healpix)[:len(str(healpix))-2], str(healpix), balfilename)
+        balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, hpdir, str(healpix), balfilename)
     try: 
         bhdu = fits.open(balfile) 
     except FileNotFoundError:
@@ -158,12 +151,16 @@ for healpix in healpixlist:
 
     if args.verbose: 
         print("Processing: ", healpix, balfile) 
+
     indxs = hindxs[hmask] # indices in qcat that are in pixel healpix
+    targids = qcat['TARGETID'][hmask] # targetids of quasars in pixel healpix, same order
+
     for i, targetid in enumerate(bhdu['BALCAT'].data['TARGETID']):
-        ind = np.where(targetid == qcat['TARGETID'])[0]
+        ind = np.where(targetid == targids)[0]
         if len(ind) > 0:
+            qindex = indxs[ind[0]]
             nmatch += 1
-            balcopy(qcat[ind[0]], bhdu['BALCAT'].data[i])
+            balcopy(qcat[qindex], bhdu['BALCAT'].data[i])
             # print(i, targetid, qcat['TARGETID'][ind[0]], qcat['Z'][ind[0]], ind[0], qcat['BALMASK'][ind[0]], qcat['BI_CIV'][ind[0]])
     f.write("{0}: {1} {2}\n".format(balfilename, len(bcat), nmatch) )
 
