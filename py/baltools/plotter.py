@@ -11,7 +11,8 @@ import numpy as np
 import os
 import random
 import matplotlib.pyplot as plt
-from astropy.io import fits 
+from astropy.io import fits, ascii 
+from astropy.table import Table
 from astropy import constants as const
 import fitsio
 import desispec.io
@@ -23,7 +24,7 @@ from baltools import balconfig as bc
 
 c = const.c.to('km/s').value         # speed of light in km/s
 
-def plotsdssname(sdssname, lam1=1340, lam2=1680, verbose=False, plotvar=True):
+def plotsdssname(sdssname, lam1=1340, lam2=1680, verbose=False, ploterr=True):
     ''' 
     Plot the SDSS spectrum with name SDSS_NAME
 
@@ -37,7 +38,7 @@ def plotsdssname(sdssname, lam1=1340, lam2=1680, verbose=False, plotvar=True):
         last wavelength
     verbose : bool
         turn on or off some progress reporting
-    plotvar : bool
+    ploterr : bool
         add variance to plot
 
     Returns
@@ -58,10 +59,10 @@ def plotsdssname(sdssname, lam1=1340, lam2=1680, verbose=False, plotvar=True):
             mjd = array['MJD']
             specfits = "spec-%s-%s-%s.fits" % (plate4, mjd, fiberid4)
             raise FileNotFoundError("Couldn't find file {0}".format(specfits))
-    plotsdssspec(qsospec, qsocathdu[1].data[qindx]['Z'], sdssname=sdssname, lam1=lam1, lam2=lam2, plotvar=plotvar)
+    plotsdssspec(qsospec, qsocathdu[1].data[qindx]['Z'], sdssname=sdssname, lam1=lam1, lam2=lam2, ploterr=ploterr)
 
 
-def plotsdssspec(hdu, zspec, sdssname="", lam1=1340, lam2=1680, plotvar=False):
+def plotsdssspec(hdu, zspec, sdssname="", lam1=1340, lam2=1680, ploterr=False):
     ''' 
     Plot the SDSS spectrum in hdu, which is expected to have 
     wavelength in hdu[1].data['loglam'] and flux in hdu[1].data['flux'] 
@@ -78,7 +79,7 @@ def plotsdssspec(hdu, zspec, sdssname="", lam1=1340, lam2=1680, plotvar=False):
         first wavelength to show (rest frame)
     lam2 : float
         last wavelength
-    plotvar : bool
+    ploterr : bool
         add variance to plot
 
     Returns
@@ -93,7 +94,7 @@ def plotsdssspec(hdu, zspec, sdssname="", lam1=1340, lam2=1680, plotvar=False):
     ax.plot(np.power(10, hdu[1].data['loglam'][mm])/(1+zspec),
              hdu[1].data['flux'][mm], label="Data")
     ax.plot(lam_z, hdu[1].data['model'], 'r:', label="SDSS Model") 
-    if plotvar: 
+    if ploterr: 
         ax.plot(np.power(10, hdu[1].data['loglam'][mm])/(1+zspec),
              np.sqrt(1./hdu[1].data['ivar'][mm]))
     ax.set_xlim(lam1, lam2)
@@ -231,7 +232,7 @@ def plotdesibal2(datadir, balcat, targetid, lam1=1340, lam2=1680):
     
     plotdesibal(specobj, balcat, targetid, lam1, lam2)
 
-def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680): 
+def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680, outfig=None, outdata=None, ploterr=True, plotpca=True): 
     '''
     Plot spectrum of a BAL in specobj with TARGETID. 
     Wrapper for plotbal()
@@ -249,6 +250,14 @@ def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680):
         first wavelength to plot (default is 1340)
     lam2 : float, optional
         last wavelength to plot (default is 1680)
+    outfig : string
+        name of the output figure 
+    outdata : string
+        name of the output data file
+    ploterr : bool
+        add variance to plot
+    plotpca : bool
+        add PCA to plot
 
     Returns
     -------
@@ -296,10 +305,10 @@ def plotdesibal(specobj, balcat, targetid, lam1=1340, lam2=1680):
 
     pcafit = fitbal.createpcatemplate(pcaeigen, pcaout)
 
-    plotbal(qsospec, pcafit, pcaeigen, balinfo, zspec, pcaout, targetid=targetid, lam1=lam1, lam2=lam2)
+    plotbal(qsospec, pcafit, pcaeigen, balinfo, zspec, pcaout, targetid=targetid, lam1=lam1, lam2=lam2, outfig=outfig, outdata=outdata, ploterr=ploterr, plotpca=plotpca)
 
 
-def plotbal(qsospec, pcafit, pcaeigen, balinfo, zspec, pcaout, lam1=1340, lam2=1680, sdssname="", targetid="", savefig=False, outfig="balfit.png", verbose=False, plotvar=True):
+def plotbal(qsospec, pcafit, pcaeigen, balinfo, zspec, pcaout, lam1=1340, lam2=1680, sdssname="", targetid="", outfig="balfit.png", outdata=None, verbose=False, ploterr=True, plotpca=True):
     '''
     Plot a BAL spectrum, mark troughs, and overplot the PCA fit
 
@@ -325,14 +334,16 @@ def plotbal(qsospec, pcafit, pcaeigen, balinfo, zspec, pcaout, lam1=1340, lam2=1
         SDSS_NAME of QSO 
     targetid : int
         DESI TARGETID
-    savefig : bool
-        save the figure? 
     outfig : string
         name of the output figure 
+    outdata : string
+        name of the output data file
     verbose : bool
         turn on or off some progress reporting
-    plotvar : bool
+    ploterr : bool
         add variance to plot
+    plotpca : bool
+        add PCA to plot
 
     Returns
     -------
@@ -355,28 +366,31 @@ def plotbal(qsospec, pcafit, pcaeigen, balinfo, zspec, pcaout, lam1=1340, lam2=1
 
     ax.plot(lam_z[mm], qsospec['flux'][mm], label="Data")
     ax.set_xlim(lam1, lam2)
-    ax.plot(pcaeigen['WAVE'], pcafit, label="PCA Fit")
+    if plotpca: 
+        ax.plot(pcaeigen['WAVE'], pcafit, label="PCA Fit")
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
+
 
     if ymin < -1.:
         ymin = -1.
         ax.set_ylim(ymin, ymax) 
-    if plotvar: 
+    if ploterr: 
         #ax.plot(np.power(10, qsospec['loglam'][mm])/(1+zspec),
         ax.plot(lam_z[mm], 
-             np.sqrt(1./qsospec['ivar'][mm]), 'r-', label="stdev")
+             np.sqrt(1./qsospec['ivar'][mm]), 'r-', label="RMS")
 
     # If pcaout[-1] > 0, then SDSS and there will be a model
-    if pcaout[-1] > 0.: 
-        ax.plot(lam_z, qsospec['model'], 'r:', label="Model") 
+    if plotpca: 
+        if pcaout[-1] > 0.: 
+            ax.plot(lam_z, qsospec['model'], 'r:', label="Model") 
 
     # draw vertical lines at BAL limits
     ymax2 = 0.75*ymax
     drawtroughs(ax, balinfo, ymin, ymax2)
 
-    ax.set_xlabel('Wavelength', fontsize=14)
-    ax.set_ylabel('Flux', fontsize=14)
+    ax.set_xlabel(r'Rest Wavelength [$\mathrm{\AA}$]', fontsize=18)
+    ax.set_ylabel('Normalized Flux', fontsize=18)
 
     #sdsschisq = fitbal.sdsschisq(qsospec, zspec)
 
@@ -405,10 +419,17 @@ def plotbal(qsospec, pcafit, pcaeigen, balinfo, zspec, pcaout, lam1=1340, lam2=1
     # add legend
     ax.legend(loc='upper right', fontsize=14)
  
-    if savefig: 
+    if outfig is not None: 
         fig.savefig(outfig) 
         if verbose: 
             print("Wrote output file {0}".format(outfig))
+
+    if outdata is not None: 
+        outdat = Table()
+        outdat['wave'] = qsospec['wave']
+        outdat['flux'] = qsospec['flux']
+        outdat['ivar'] = qsospec['ivar']
+        ascii.write(outdat, outdata, overwrite=True)
 
     plt.show()
     plt.close() 
