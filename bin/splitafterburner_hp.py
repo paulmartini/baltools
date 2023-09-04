@@ -46,6 +46,9 @@ parser.add_argument('-s', '--survey', type = str, default = 'main', required = F
 parser.add_argument('-m', '--moon', type = str, default = 'dark', required = False,
                     help = 'Moon brightness [bright, dark], default is dark')
 
+parser.add_argument('--mock', default=False, required = False, action='store_true',
+                    help = 'Mock catalog?, default is False')
+
 parser.add_argument('-l','--logfile', type = str, default = 'logfile-{survey}-{moon}.txt', required = False,
                     help = 'Name of log file written to outdir, default is logfile-{survey}-{moon}.txt')
 
@@ -67,7 +70,10 @@ qhdu = fits.open(args.qsocat)
 qcat = qhdu[1].data
 
 # Calculate healpix for every QSO 
-healpixels = hp.ang2pix(64, qcat['TARGET_RA'], qcat['TARGET_DEC'], lonlat=True, nest=True)
+if args.mock:
+    healpixels = hp.ang2pix(16, qcat['RA'], qcat['DEC'], lonlat=True, nest=True)
+else:
+    healpixels = hp.ang2pix(64, qcat['TARGET_RA'], qcat['TARGET_DEC'], lonlat=True, nest=True)
 
 # Construct a list of unique healpix pixels
 healpixlist = np.unique(healpixels)
@@ -79,7 +85,14 @@ if args.verbose:
     print("Found {0} entries with {1} unique healpix".format(len(healpixels), len(healpixlist)))
 
 # logfile = os.path.join(args.baldir, args.logfile) 
-logfile = os.path.join(args.altzdir, "logfile-{0}-{1}.txt".format(args.survey, args.moon))
+if args.mock:
+    logfile = os.path.join(args.altzdir, "logfile-mock.txt")
+else:
+    logfile = os.path.join(args.altzdir, "logfile-{0}-{1}.txt".format(args.survey, args.moon))
+
+if not os.path.isdir(args.altzdir): 
+    utils.pmmkdir(args.altzdir) 
+
 f = open(logfile, 'a')
 try:
     lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
@@ -103,10 +116,14 @@ f.write(outstr)
 
 for healpix in healpixlist: 
     hpdir = utils.gethpdir(str(healpix))
-    zfilename = "{0}-{1}-{2}-{3}.fits".format(args.zfileroot, args.survey, args.moon, healpix) 
-    zdir = os.path.join(args.altzdir, "healpix", args.survey, args.moon, hpdir, str(healpix))
+    if args.mock: 
+        zfilename = "{0}-16-{1}.fits".format(args.zfileroot, healpix)
+        zdir = os.path.join(args.altzdir, "spectra-16", hpdir, str(healpix))
+    else: 
+        zfilename = "{0}-{1}-{2}-{3}.fits".format(args.zfileroot, args.survey, args.moon, healpix) 
+        zdir = os.path.join(args.altzdir, "healpix", args.survey, args.moon, hpdir, str(healpix))
     utils.pmmkdir(zdir) 
-    zfile = os.path.join(args.altzdir, "healpix", args.survey, args.moon, hpdir, str(healpix), zfilename)
+    zfile = os.path.join(zdir, zfilename)
      
     # Check if the file already exists
     if os.path.isfile(zfile) and args.clobber == False:
@@ -126,8 +143,12 @@ for healpix in healpixlist:
 
     # Create the fits table:
     col0 = fits.Column(name='TARGETID', format='K', array=qcat['TARGETID'][hmask])
-    col1 = fits.Column(name='TARGET_RA', format='E', array=qcat['TARGET_RA'][hmask])
-    col2 = fits.Column(name='TARGET_DEC', format='E', array=qcat['TARGET_DEC'][hmask])
+    if args.mock:
+        col1 = fits.Column(name='TARGET_RA', format='E', array=qcat['RA'][hmask])
+        col2 = fits.Column(name='TARGET_DEC', format='E', array=qcat['DEC'][hmask])
+    else: 
+        col1 = fits.Column(name='TARGET_RA', format='E', array=qcat['TARGET_RA'][hmask])
+        col2 = fits.Column(name='TARGET_DEC', format='E', array=qcat['TARGET_DEC'][hmask])
     col3 = fits.Column(name='Z', format='E', array=qcat['Z'][hmask])
     col4 = fits.Column(name='ZERR', format='E', array=qcat['ZERR'][hmask])
     col5 = fits.Column(name='ZWARN', format='E', array=qcat['ZWARN'][hmask])

@@ -76,6 +76,7 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
     if 'spectra-' in specfilename:
         specshort = specfilename[specfilename.rfind('spectra-'):specfilename.rfind('.fits')]
         zshort = specshort.replace('spectra', zfileroot)
+        tshort = specshort.replace('spectra', 'truth')  # need this for mocks without resolution matrix 
     elif 'coadd-' in specfilename:
         specshort = specfilename[specfilename.rfind('coadd-'):specfilename.rfind('.fits')]
         zshort = specshort.replace('coadd', zfileroot)
@@ -118,11 +119,37 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
         try:
             specobj = coadd_cameras(specobj, cosmics_nsig=None)
         except:
-            wave_min = np.min(specobj.wave['b'])
-            wave_max = np.max(specobj.wave['z'])
-            specobj = resample_spectra_lin_or_log(specobj,linear_step=0.8, wave_min =wave_min, wave_max =wave_max, fast = True)
-            specobj = coadd_cameras(specobj, cosmics_nsig=None)
-            print("coadded_cameras using lispace resample")
+            if specobj.resolution_data is not None: 
+                wave_min = np.min(specobj.wave['b'])
+                wave_max = np.max(specobj.wave['z'])
+                specobj = resample_spectra_lin_or_log(specobj,linear_step=0.8, wave_min =wave_min, wave_max =wave_max, fast = True)
+                specobj = coadd_cameras(specobj, cosmics_nsig=None)
+                print("coadded_cameras using lispace resample")
+            else:
+                truthfile = specfilename.replace(specshort, tshort)
+                if not os.path.isfile(truthfile):
+                    print(f"Error: {truthfile} not found and resoution data not in {specfilename}")
+                thdu = fits.open(truthfile)
+                bdim = thdu['B_RESOLUTION'].data.shape[0]
+                rdim = thdu['R_RESOLUTION'].data.shape[0]
+                zdim = thdu['Z_RESOLUTION'].data.shape[0]
+                bresdata = np.empty([specobj.flux['b'].shape[0], bdim, specobj.flux['b'].shape[1]], dtype=float)
+                for i in range(specobj.flux['b'].shape[0]):
+                    bresdata[i] = thdu['B_RESOLUTION'].data
+                rresdata = np.empty([specobj.flux['r'].shape[0], rdim, specobj.flux['r'].shape[1]], dtype=float)
+                for i in range(specobj.flux['r'].shape[0]):
+                    rresdata[i] = thdu['R_RESOLUTION'].data
+                zresdata = np.empty([specobj.flux['z'].shape[0], zdim, specobj.flux['z'].shape[1]], dtype=float)
+                for i in range(specobj.flux['z'].shape[0]):
+                    zresdata[i] = thdu['Z_RESOLUTION'].data
+                specobj.resolution_data = {}
+                specobj.resolution_data['b'] = bresdata
+                specobj.resolution_data['r'] = rresdata
+                specobj.resolution_data['z'] = zresdata
+                #wave_min = np.min(specobj.wave['b'])
+                wave_min = 3600.
+                wave_max = np.max(specobj.wave['z'])
+                specobj = resample_spectra_lin_or_log(specobj,linear_step=0.8, wave_min =wave_min, wave_max =wave_max, fast = True)
             
     zs = fitsio.read(zfilename)
 

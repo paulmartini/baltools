@@ -53,11 +53,17 @@ def parse(options=None):
     parser.add_argument('-m', '--moon', type = str, default = 'dark', required = False,
                     help = 'Moon brightness [bright, dark], default is dark')
 
-    parser.add_argument('-o','--outdir', type = str, default = None, required = True,
-                    help = 'Root directory for output files')
+    parser.add_argument('--mock', default=False, required = False, action='store_true',
+                    help = 'Mock catalog?, default is False')
+
+    parser.add_argument('--mockdir', type=str, default = None, required=False,
+                    help='Path to directory structure with mock data (not including spectra-16/)') 
+
+#    parser.add_argument('-o','--outdir', type = str, default = None, required = True,
+#                    help = 'Root directory for output files')
 
     parser.add_argument('-l','--logfile', type = str, default = 'logfile.txt', required = False,
-                    help = 'Name of log file written to outdir, default is logfile.txt')
+                    help = 'Name of log file written to altzdir, default is logfile.txt')
 
     parser.add_argument('--nproc', type=int, default=64, required=False,
                         help='Number of processes')
@@ -85,10 +91,16 @@ def main(args=None):
         args = parse(args)
 
     # Root directory for input data: 
-    dataroot = os.path.join(os.getenv("DESI_SPECTRO_REDUX"), args.release, "healpix", args.survey, args.moon) 
+    if args.mock: 
+        dataroot = os.path.join(args.mockdir, 'spectra-16') 
+    else: 
+        dataroot = os.path.join(os.getenv("DESI_SPECTRO_REDUX"), args.release, "healpix", args.survey, args.moon) 
         
-    # Root directory for output catalogs: 
-    outroot = os.path.join(args.outdir, "healpix", args.survey, args.moon)
+    # Root directory for output individual BAL catalogs: 
+    if args.mock: 
+        outroot = os.path.join(args.altzdir, 'spectra-16') 
+    else: 
+        outroot = os.path.join(args.altzdir, "healpix", args.survey, args.moon)
     utils.pmmkdir(outroot)
     
     # All possible healpix --
@@ -100,7 +112,6 @@ def main(args=None):
     # Requested healpix
     inputhealpixels = args.healpix
     
-    zfileroot = args.zfileroot
     altzdir = None
     
     # Check that all requested healpix exist
@@ -175,21 +186,23 @@ def _func(arg):
 def findbals_one_healpix(healpix, args, healpixels, dataroot, outroot): 
 
     skiphealpix = False
-    coaddfilename = "coadd-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
-    balfilename = coaddfilename.replace('coadd-', 'baltable-')
-
     hpdir = utils.gethpdir(healpix) 
+    if args.mock: 
+        coaddfilename = "spectra-16-{0}.fits".format(healpix) 
+        balfilename = coaddfilename.replace('spectra-16-', 'baltable-16-')
+        altzdir = os.path.join(args.altzdir, 'spectra-16', hpdir, healpix) 
+    else: 
+        coaddfilename = "coadd-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
+        balfilename = coaddfilename.replace('coadd-', 'baltable-')
+        altzdir = os.path.join(args.altzdir, 'healpix', args.survey, args.moon, hpdir, healpix) 
+
+    zfilename = balfilename.replace('baltable-', args.zfileroot+"-")
     indir = os.path.join(dataroot, hpdir, healpix)
     outdir = os.path.join(outroot, hpdir, healpix)
 
     coaddfile = os.path.join(indir, coaddfilename) 
     balfile = os.path.join(outdir, balfilename) 
     zfile = balfile.replace('baltable-', args.zfileroot+"-")
-
-    if args.altzdir is not None: 
-        if args.zfileroot is None:
-            zfileroot = 'redrock'
-        altzdir = os.path.join(args.altzdir, 'healpix', args.survey, args.moon, hpdir, healpix) 
 
     # Check to see if zfile exists -- if not, skip
     if not os.path.isfile(zfile): 

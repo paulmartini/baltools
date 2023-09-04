@@ -55,9 +55,9 @@ parser.add_argument('-s', '--survey', type = str, default = 'main', required = F
 parser.add_argument('-m', '--moon', type = str, default = 'dark', required = False,
                     help = 'Moon brightness [bright, dark], default is dark')
 
-parser.add_argument('--mock', type = bool, default=False, required = False,
-                    help = 'Mock catalog?, default is False') 
-
+parser.add_argument('--mock', default=False, required = False, action='store_true',
+                    help = 'Mock catalog?, default is False')
+                
 parser.add_argument('-l','--logfile', type = str, default = 'logfile-{survey}-{moon}.txt', required = False,
                     help = 'Name of log file written to outdir, default is logfile-{survey}-{moon}.txt')
 
@@ -134,7 +134,7 @@ for healpix in healpixlist:
     hpdir = utils.gethpdir(str(healpix))
     if args.mock: 
         balfilename = "baltable-16-{0}.fits".format(healpix) 
-        balfile = os.path.join(args.baldir, balfilename)
+        balfile = os.path.join(args.baldir, 'spectra-16', hpdir, str(healpix), balfilename)
     else: 
         balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
         balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, hpdir, str(healpix), balfilename)
