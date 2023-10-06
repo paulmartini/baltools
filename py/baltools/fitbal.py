@@ -75,6 +75,8 @@ def initialize():
     balinfo['POSMIN_SIIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
     balinfo['FMIN_SIIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
 
+    balinfo['SNR_CIV'] = -1.
+
     return balinfo
 
 def determine_trough_BI(norm_flux, norm_sigma, speed_c):
@@ -314,6 +316,9 @@ def calculatebalinfo(idata, model, verbose=False):
     normal_flux_ai = balspec[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
     sigma_bi = sigma_origin[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
     sigma_ai = sigma_origin[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
+
+    # Compute the median SNR over the range from -25000 to 0 km/s
+    balinfo['SNR_CIV'] = np.median( balspec[plotmin:speed_max_ai] / np.sqrt( sigma_origin[plotmin:speed_max_ai] ) ) 
 
     if verbose:
         print("calculatebalinfo: CIV -- ") 

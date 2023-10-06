@@ -14,7 +14,6 @@ findbaltab_sdss()    Return hdu for BAL table, initialize if necessary
 updatebaltab_sdss()  Update BAL values in a row of the BAL table
 
 initbaltab_desi()    Create empty BAL table 
-findbaltab_desi()    Return hdu for BAL table, initialize if necessary
 updatebaltab_desi()  Update BAL values in a row of the BAL table
 
 """
@@ -91,7 +90,10 @@ def cattobalinfo(array):
         info['POSMIN_SIIV_450'] = array['POSMIN_SIV_450']
         info['FMIN_SIIV_450'] = array['FMIN_SIV_450']
 
-
+    try:
+        info['SNR_CIV'] = array['SNR_CIV']
+    except KeyError:
+        info['SNR_CIV'] = -1.
 
     return info
 
@@ -200,6 +202,8 @@ def initbaltab_desi(specdata, zdata, outputfile, pcaeigen, overwrite=False, rele
     col52 = fits.Column(name='POSMIN_SIIV_450', format='17E', array=zfloat_aicol)
     col53 = fits.Column(name='FMIN_SIIV_450', format='17E', array=zfloat_aicol)
 
+    col54 = fits.Column(name='SNR_CIV', format='E', array=zfloat_col)
+
     balhead = fits.Header({'SIMPLE': True})
     balhead['EXTNAME'] = "BALCAT"
     tabhdu = fits.BinTableHDU.from_columns([col0, col1, col2, 
@@ -211,7 +215,7 @@ def initbaltab_desi(specdata, zdata, outputfile, pcaeigen, overwrite=False, rele
                                             col37, col38, col39, col40, col41,
                                             col42, col43, col44, col45, col46,
                                             col47, col48, col49, col50, col51,
-                                            col52, col53], 
+                                            col52, col53, col54], 
                                             header=balhead)
 
     tabhdu.writeto(outputfile, overwrite=overwrite)
@@ -279,6 +283,8 @@ def updatebaltab_desi(targetid, balhdu, info, pcaout, pcaeigen):
     balhdu[1].data[qindx]['VMAX_SIIV_450'] = info['VMAX_SIIV_450']
     balhdu[1].data[qindx]['POSMIN_SIIV_450'] = info['POSMIN_SIIV_450']
     balhdu[1].data[qindx]['FMIN_SIIV_450'] = info['FMIN_SIIV_450']
+
+    balhdu[1].data[qindx]['SNR_CIV'] = info['SNR_CIV']
 
     return balhdu
 
