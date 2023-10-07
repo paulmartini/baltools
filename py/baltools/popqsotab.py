@@ -73,13 +73,13 @@ def concatbaltabs(rootbaldir, outtab):
     try:
         concatbaltab.write(outtab , format = 'fits')
     except OSError:
-        print("File ", outtab, " already exists.")
+        print(f"File {outtab} already exists")
         
     print("BAL tables located under {} stacked into new table. BAL information table was written to {}.".format(rootbaldir, outtab))
         
 
 
-def inittab(qsocatpath, outtab, alttemp=False):
+def inittab(qsocatpath, outtab, alttemp=False, truthlist=False): 
     '''
     Populate table with information from QSO catalogue,
     make empty tables for BAL information to be added later.
@@ -92,6 +92,8 @@ def inittab(qsocatpath, outtab, alttemp=False):
         where to write resulting catalogue to.
     alttemp : bool
         use alternate (Brodzeller) templates? (default False) 
+    truthlist : bool
+        use shorter list when combining mock qso and truth catalogs
 
     Returns
     -------
@@ -170,17 +172,25 @@ def inittab(qsocatpath, outtab, alttemp=False):
     col29 = fits.Column(name='POSMIN_SIIV_450', format='17E', array=zfloat_aicol)
     col30 = fits.Column(name='FMIN_SIIV_450', format='17E', array=zfloat_aicol)
     
-   # Seperate column not populated in runbalfinder which serves as a bitmask
+    # Seperate column not populated in runbalfinder which serves as a bitmask
     col31 = fits.Column(name='BALMASK', format='B', array=zbyte_col) # default is '1' (not found in baltable)
+    col32 = fits.Column(name='SNR_CIV', format='E', array=zfloat_col)
+
     
-    
-    #Columns relating to BAL information from runbalfinder
-    BALcols = fits.ColDefs([col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19, col20, col21, col22,           col23, col24, col25, col26, col27, col28, col29, col30])
+    # Columns relating to BAL information from runbalfinder
+    PCAcols = fits.ColDefs([col0, col1]) 
+    CIVcols = fits.ColDefs([col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16])
+    SiIVcols = fits.ColDefs([col17, col18, col19, col20, col21, col22, col23, col24, col25, col26, col27, col28, col29, col30])
     
     #Columns already contained in QSO catalogue
     catcols = cathdu[1].columns
     
-    totcols  = catcols + BALcols + col31
+    if truthlist: 
+        BALcols = col2 + CIVcols 
+    else: 
+        BALcols  = PCAcols + col2 + CIVcols + SiIVcols + col31 + col32
+
+    totcols = catcols + BALcols 
     
     #List of card names in BinHDU relating to BALs
     #Will beiterated through in initcreate.popqsotab()
@@ -196,10 +206,10 @@ def inittab(qsocatpath, outtab, alttemp=False):
     try:
         cathdu.writeto(outtab)
     except OSError:
-        print("File ", outtab, " already exists.")
+        print(f"File {outtab} already exists")
         return balcolnames
         
-    print("Empty BAL columns added to input QSO catalogue at ", str(qsocatpath), " and written to ", str(outtab), ".")
+    print(f"Empty BAL columns added to input QSO catalogue at {qsocatpath} and written to {outtab}")
     
     return balcolnames 
 
