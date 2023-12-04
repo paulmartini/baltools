@@ -90,7 +90,8 @@ for qindx,targid in enumerate(qhdu['ZCATALOG'].data['TARGETID']):
     if len(bindx) > 0: 
         bindx = bindx[0]
         balcopy(qhdu['ZCATALOG'].data[qindx], bhdu['ZCATALOG'].data[bindx])
-        print(targid, qhdu[1].data['TARGETID'][qindx], bhdu[1].data['TARGETID'][bindx], qhdu[1].data['AI_CIV'][qindx])
+        if args.verbose: 
+            print(targid, qhdu[1].data['TARGETID'][qindx], bhdu[1].data['TARGETID'][bindx], qhdu[1].data['AI_CIV'][qindx])
 
 qhdu[1].header['EXTNAME'] = 'ZCATALOG'
 qhdu.writeto(outcat, overwrite=True)
