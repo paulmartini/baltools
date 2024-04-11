@@ -223,11 +223,30 @@ def plotdesibal2(datadir, balcat, targetid, lam1=1340, lam2=1680):
     '''
 
     qindx = np.where(balcat['TARGETID'] == targetid)[0][0]
-    tileid = str(balcat['TILEID'][qindx])
-    night = str(balcat['NIGHT'][qindx])
-    sp = str(balcat['PETAL_LOC'][qindx])
-    coaddpath = os.path.join(datadir, 'tiles', tileid, night)
-    coaddfile = coaddpath + '/coadd-' + sp + '-' + tileid + '-' + night + '.fits'
+    tileid = None
+    healpix = None
+
+    try:
+        healpix = str(balcat['HPXPIXEL'][qindx])
+    except:
+        try:
+            tileid = str(balcat['TILEID'][qindx])
+            night = str(balcat['NIGHT'][qindx])
+        except:
+            print("Error: Catalog does not have HPXPIXEL or TILEID. Cannot find coadd spectrum.")
+
+    if healpix is not None:
+        hpdir = utils.gethpdir(healpix)
+        coaddfilename = "coadd-{0}-{1}-{2}.fits".format('main', 'dark', healpix)
+        coaddfile = os.path.join(datadir, 'healpix', 'main', 'dark', hpdir, healpix, coaddfilename)
+
+    if tileid is not None:
+        tileid = str(balcat['TILEID'][qindx])
+        night = str(balcat['NIGHT'][qindx])
+        sp = str(balcat['PETAL_LOC'][qindx])
+        coaddpath = os.path.join(datadir, 'tiles', tileid, night)
+        coaddfile = coaddpath + '/coadd-' + sp + '-' + tileid + '-' + night + '.fits'
+
     specobj = desispec.io.read_spectra(coaddfile)
     
     plotdesibal(specobj, balcat, targetid, lam1, lam2)
