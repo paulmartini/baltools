@@ -318,7 +318,8 @@ def calculatebalinfo(idata, model, verbose=False):
     sigma_ai = sigma_origin[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
 
     # Compute the median SNR over the range from -25000 to 0 km/s
-    balinfo['SNR_CIV'] = np.median( balspec[plotmin:speed_max_ai] / np.sqrt( sigma_origin[plotmin:speed_max_ai] ) ) 
+    # balinfo['SNR_CIV'] = np.median( balspec[plotmin:speed_max_ai] / np.sqrt( sigma_origin[plotmin:speed_max_ai] ) ) 
+    balinfo['SNR_CIV'] = np.median( balspec[plotmin:speed_max_ai] / ( sigma_origin[plotmin:speed_max_ai] ) ) 
 
     if verbose:
         print("calculatebalinfo: CIV -- ") 

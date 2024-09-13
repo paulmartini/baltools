@@ -59,8 +59,8 @@ def parse(options=None):
     parser.add_argument('--mockdir', type=str, default = None, required=False,
                     help='Path to directory structure with mock data (not including spectra-16/)') 
 
-#    parser.add_argument('-o','--outdir', type = str, default = None, required = True,
-#                    help = 'Root directory for output files')
+    parser.add_argument('-o','--outdir', type = str, default = None, required = False,
+                    help = 'Deprecated -- now ignored')
 
     parser.add_argument('-l','--logfile', type = str, default = 'logfile.txt', required = False,
                     help = 'Name of log file written to altzdir, default is logfile.txt')
@@ -102,6 +102,9 @@ def main(args=None):
     else: 
         outroot = os.path.join(args.altzdir, "healpix", args.survey, args.moon)
     utils.pmmkdir(outroot)
+
+    if args.outdir is not None:
+        print(f"Warning: --outdir is deprecated. Using {outroot} based on altzdir parameter") 
     
     # All possible healpix --
     healpixdirs = glob(dataroot + "/*/*")

@@ -28,11 +28,21 @@ from baltools import utils
 truthcols = ['BAL_PROB', 'BI_CIV', 'ERR_BI_CIV', 'NCIV_2000', 'VMIN_CIV_2000', 'VMAX_CIV_2000', 'POSMIN_CIV_2000', 'FMIN_CIV_2000', 'AI_CIV', 'ERR_AI_CIV', 'NCIV_450', 'VMIN_CIV_450', 'VMAX_CIV_450', 'POSMIN_CIV_450', 'FMIN_CIV_450']
 
 def balcopy(qinfo, binfo):
+    '''
+    Copy balinfo (binfo) into the quasar catalog (qinfo)
+    '''
     for balcol in truthcols: 
-        try: 
-            qinfo[balcol] = binfo[balcol]
-        except: 
-            continue
+        # Note: the baltemplates have these 27 element arrays for these four quantities, not bc.NAI = 17
+        if balcol in ['VMIN_CIV_450', 'VMAX_CIV_450', 'POSMIN_CIV_450', 'FMIN_CIV_450']:
+            try:
+                qinfo[balcol][:bc.NAI] = binfo[balcol][:bc.NAI]
+            except:
+                continue
+        else:
+            try:
+                qinfo[balcol] = binfo[balcol]
+            except:
+                continue
     qinfo['BALMASK'] = 0
 
 
@@ -91,7 +101,7 @@ for qindx,targid in enumerate(qhdu['ZCATALOG'].data['TARGETID']):
         bindx = bindx[0]
         balcopy(qhdu['ZCATALOG'].data[qindx], bhdu['ZCATALOG'].data[bindx])
         if args.verbose: 
-            print(targid, qhdu[1].data['TARGETID'][qindx], bhdu[1].data['TARGETID'][bindx], qhdu[1].data['AI_CIV'][qindx])
+            print(targid, qhdu[1].data['TARGETID'][qindx], bhdu[1].data['TARGETID'][bindx], qhdu[1].data['AI_CIV'][qindx], qhdu[1].data['VMIN_CIV_450'][qindx])
 
 qhdu[1].header['EXTNAME'] = 'ZCATALOG'
 qhdu.writeto(outcat, overwrite=True)

@@ -215,12 +215,13 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
         qsospec['ivar'] = specobj.ivar['brz'][qso]
         qsospec['model'] = np.zeros(len(specobj.wave['brz'])) # add to match SDSS format
         targetid = fm['TARGETID'][qso]
-        info, pcaout, mask = fitbal.calcbalparams(qsospec, pcaeigen, zspec)
+        info, pcaout, mask = fitbal.calcbalparams(qsospec, pcaeigen, zspec, verbose=False)
         # update baltable
         ### Code below has been changed to allow new argument
         balhdu = baltable.updatebaltab_desi(targetid, balhdu, info, pcaout, pcaeigen)
         if verbose: 
-            print("{0} Processed {1} at z = {2:.2f}: AI_CIV = {3:.0f}, BI_CIV = {4:.0f}".format(i, targetid, zspec, info['AI_CIV'], info['BI_CIV']))
+            # print("{0} Processed {1} at z = {2:.2f}: AI_CIV = {3:.0f}, BI_CIV = {4:.0f}".format(i, targetid, zspec, info['AI_CIV'], info['BI_CIV']))
+            print("{0} Processed {1} at z = {2:.2f}: AI_CIV = {3:.0f}, BI_CIV = {4:.0f}, SNR_CIV = {5:.1f}".format(i, targetid, zspec, info['AI_CIV'], info['BI_CIV'], info['SNR_CIV']))
 
 
     balhdu.writeto(balfilename, overwrite=True)
