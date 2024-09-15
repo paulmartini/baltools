@@ -26,8 +26,7 @@ from baltools import balconfig as bc
 from baltools import baltable
 import getpass
 
-### Added an optional argument alttemp to this function
-def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfileroot='zbest', overwrite=True, verbose=False, release=None, format='healpix'): 
+def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfileroot='zbest', overwrite=True, verbose=False, release=None, usetid=True, format='healpix'): 
     '''
     Find BALs in DESI quasars
     1. Identify all objects classified as quasars that are in the redshift
@@ -53,6 +52,8 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
         Provide verbose output? (default is False)
     release : string, optional
         Specifies the data release (default if None)
+    usetid : bool, optional
+        Only read specified TARGETIDs (default is True) 
     format : string, optional 
         Specifies either healpix or tile based (default is healpix)
 
@@ -62,7 +63,7 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
     ''' 
 
     if release is None:
-        release = 'everest'
+        release = 'kibo'
    
     if zfileroot is None: 
         if release == 'everest': 
@@ -111,8 +112,18 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
         print("desibal(): Warning {0} exists and overwrite = False, so not re-running balfinder".format(balfilename))
         return
 
-    # Read in the DESI spectra
-    specobj = desispec.io.read_spectra(specfilename)
+    # Get the QSO TARGETIDs
+    zs = fitsio.read(zfilename)
+
+    if verbose: 
+        print("Read file {}".format(zfilename))
+
+    tids = zs['TARGETID']
+    if usetid: 
+        specobj = desispec.io.read_spectra(specfilename, targetids=tids, skip_hdus=['B_RESOLUTION', 'R_RESOLUTION', 'Z_RESOLUTION'])
+    else: 
+        specobj = desispec.io.read_spectra(specfilename) 
+
     # See if 3 cameras are coadded, and coadd them if they are not:
     # (at least some of the mock data are not coadded)
     if 'brz' not in specobj.wave.keys():
@@ -151,11 +162,6 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
                 wave_max = np.max(specobj.wave['z'])
                 specobj = resample_spectra_lin_or_log(specobj,linear_step=0.8, wave_min =wave_min, wave_max =wave_max, fast = True)
             
-    zs = fitsio.read(zfilename)
-
-    if verbose: 
-        print("Read file {}".format(zfilename))
-
     # Identify the spectra classified as quasars based on zs and within 
     # the nominal redshift range for BALs
     # BAL_ZMIN = 1.57
@@ -222,7 +228,6 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
         if verbose: 
             # print("{0} Processed {1} at z = {2:.2f}: AI_CIV = {3:.0f}, BI_CIV = {4:.0f}".format(i, targetid, zspec, info['AI_CIV'], info['BI_CIV']))
             print("{0} Processed {1} at z = {2:.2f}: AI_CIV = {3:.0f}, BI_CIV = {4:.0f}, SNR_CIV = {5:.1f}".format(i, targetid, zspec, info['AI_CIV'], info['BI_CIV'], info['SNR_CIV']))
-
 
     balhdu.writeto(balfilename, overwrite=True)
 
