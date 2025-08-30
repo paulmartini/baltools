@@ -61,6 +61,7 @@ class TestCommandLineLogic(unittest.TestCase):
             while i < len(args_list):
                 if args_list[i] == '--tids':
                     result['tids'] = True
+                    i += 1  # Increment index to avoid infinite loop
                 elif args_list[i].startswith('--'):
                     key = args_list[i][2:]
                     if i + 1 < len(args_list) and not args_list[i + 1].startswith('--'):
