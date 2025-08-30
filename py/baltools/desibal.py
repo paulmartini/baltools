@@ -128,13 +128,13 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
     # (at least some of the mock data are not coadded)
     if 'brz' not in specobj.wave.keys():
         try:
-            specobj = coadd_cameras(specobj, cosmics_nsig=None)
+            specobj = coadd_cameras(specobj)
         except:
             if specobj.resolution_data is not None: 
                 wave_min = np.min(specobj.wave['b'])
                 wave_max = np.max(specobj.wave['z'])
                 specobj = resample_spectra_lin_or_log(specobj,linear_step=0.8, wave_min =wave_min, wave_max =wave_max, fast = True)
-                specobj = coadd_cameras(specobj, cosmics_nsig=None)
+                specobj = coadd_cameras(specobj)
                 print("coadded_cameras using lispace resample")
             else:
                 truthfile = specfilename.replace(specshort, tshort)
