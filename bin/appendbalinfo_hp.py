@@ -9,6 +9,7 @@ QSO catalogue and add information from baltables to new catalogue.
 runbalfinder.py tables
 
 2021 Original code by Simon Filbert
+OPTIMIZED VERSION for NERSC systems with high core counts
 
 """
 
@@ -17,6 +18,9 @@ import sys
 import numpy as np
 from astropy.io import fits
 import healpy as hp
+import fitsio
+from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import argparse
 from time import gmtime, strftime
@@ -34,6 +38,65 @@ def balcopy(qinfo, binfo):
         qinfo[balcol] = binfo[balcol]
     qinfo['BALMASK'] = 0
 
+def calculate_healpix_vectorized(ra, dec, nside=64):
+    """Calculate healpix for all coordinates at once using vectorized operations"""
+    return hp.ang2pix(nside, ra, dec, lonlat=True, nest=True)
+
+def match_targets_vectorized(qso_targetids, bal_targetids):
+    """Match targets using vectorized operations for better performance"""
+    # Create a mapping from targetid to index
+    qso_map = {tid: idx for idx, tid in enumerate(qso_targetids)}
+    
+    # Find matches using vectorized operations
+    matches = []
+    for bal_idx, bal_tid in enumerate(bal_targetids):
+        if bal_tid in qso_map:
+            matches.append((qso_map[bal_tid], bal_idx))
+    
+    return matches
+
+def process_healpix_batch(healpix_batch, args, qcat, healpixels, hindxs):
+    """Process a batch of healpix pixels"""
+    results = []
+    
+    for healpix in healpix_batch:
+        nmatch = 0
+        hpdir = utils.gethpdir(str(healpix))
+        
+        if args.mock: 
+            balfilename = f"baltable-16-{healpix}.fits"
+            balfile = os.path.join(args.baldir, 'spectra-16', hpdir, str(healpix), balfilename)
+        else: 
+            balfilename = f"baltable-{args.survey}-{args.moon}-{healpix}.fits"
+            balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, hpdir, str(healpix), balfilename)
+        
+        try: 
+            # Use fitsio for faster reading
+            bcat = fitsio.read(balfile, ext='BALCAT')
+        except (FileNotFoundError, OSError):
+            if args.verbose:
+                print(f"Warning: Did not find {balfile}")
+            continue
+
+        hmask = healpixels == healpix  # mask of everything in qcat in this healpix
+
+        if args.verbose: 
+            print(f"Processing: {healpix} {balfile}")
+
+        indxs = hindxs[hmask] # indices in qcat that are in pixel healpix
+        targids = qcat['TARGETID'][hmask] # targetids of quasars in pixel healpix, same order
+
+        # Use vectorized matching for better performance
+        matches = match_targets_vectorized(targids, bcat['TARGETID'])
+        
+        for qidx, bidx in matches:
+            qindex = indxs[qidx]
+            nmatch += 1
+            balcopy(qcat[qindex], bcat[bidx])
+        
+        results.append((balfilename, len(bcat), nmatch))
+    
+    return results
 
 os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
 
@@ -70,109 +133,131 @@ parser.add_argument('-v','--verbose', default=False, required=False, action='sto
 parser.add_argument('-t','--alttemp', default=False, required=False, action='store_true',
                     help = 'Use alternate components made by Allyson Brodzeller')
 
+parser.add_argument('--nproc', type=int, default=64, required=False,
+                    help='Number of processes for parallel processing (default: 64)')
+
+parser.add_argument('--chunk-size', type=int, default=100, required=False,
+                    help='Chunk size for parallel processing (default: 100)')
+
 args  = parser.parse_args()
 
-# Check the QSO catalog exists
-if not os.path.isfile(args.qsocat):
-    print("Error: cannot find ", args.qsocat)
-    exit(1)
+def main():
+    # Check the QSO catalog exists
+    if not os.path.isfile(args.qsocat):
+        print("Error: cannot find ", args.qsocat)
+        exit(1)
     
+    if args.verbose:
+        print(f"Reading QSO catalog: {args.qsocat}")
     
-# Full path to the output QSO+BAL catalog
-outcat = os.path.join(args.outcatfile) 
+    # Full path to the output QSO+BAL catalog
+    outcat = os.path.join(args.outcatfile) 
 
-# Add empty BAL cols to qso cat and writes to outcat.
-# Stores return value (BAL card names) in cols
-cols = pt.inittab(args.qsocat, outcat, alttemp=args.alttemp)
-# # Want to manually set this to -1 to show that it is not populated
-# cols.remove('BAL_PROB')
+    # Add empty BAL cols to qso cat and writes to outcat.
+    # Stores return value (BAL card names) in cols
+    cols = pt.inittab(args.qsocat, outcat, alttemp=args.alttemp)
+    
+    if args.verbose:
+        print(f"Initialized BAL columns in output catalog: {outcat}")
 
-qhdu = fits.open(outcat)
-qcat = qhdu[1].data
+    # Read QSO catalog using fitsio for better performance
+    qcat = fitsio.read(outcat, ext=1)
 
-# Calculate healpix for every QSO 
-if args.mock: 
-    healpixels = hp.ang2pix(16, qcat['RA'], qcat['DEC'], lonlat=True, nest=True)
-else: 
-    healpixels = hp.ang2pix(64, qcat['TARGET_RA'], qcat['TARGET_DEC'], lonlat=True, nest=True)
+    if args.verbose:
+        print(f"Loaded {len(qcat)} QSOs from catalog")
 
-# Construct a list of unique healpix pixels
-healpixlist = np.unique(healpixels)
-
-# Construct an array of indices for the QSO catalog
-hindxs = np.arange(0, len(qcat), dtype=int)
-
-if args.verbose: 
-    print("Found {0} entries with {1} unique healpix".format(len(healpixels), len(healpixlist)))
-
-# logfile = os.path.join(args.baldir, args.logfile) 
-if args.mock: 
-    logfile = os.path.join(args.baldir, "logfile-mock.txt")
-else: 
-    logfile = os.path.join(args.baldir, "logfile-{0}-{1}.txt".format(args.survey, args.moon))
-
-f = open(logfile, 'a')
-try:
-    lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
-except:
-    try:
-        lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('USER'))
-    except:
-        try:
-            lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('LOGNAME'))
-        except:
-            print("Error with tagging log file")
-            lastupdate = "Last updated {0} UT \n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()))
-commandline = " ".join(sys.argv)
-f.write(lastupdate)
-f.write(commandline+'\n')
-outstr = "Healpix NQSOs Nmatches \n"
-f.write(outstr)
-
-for healpix in healpixlist: 
-    nmatch = 0
-    hpdir = utils.gethpdir(str(healpix))
+    # Calculate healpix for every QSO using vectorized operations
     if args.mock: 
-        balfilename = "baltable-16-{0}.fits".format(healpix) 
-        balfile = os.path.join(args.baldir, 'spectra-16', hpdir, str(healpix), balfilename)
+        healpixels = calculate_healpix_vectorized(qcat['RA'], qcat['DEC'], nside=16)
     else: 
-        balfilename = "baltable-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
-        balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, hpdir, str(healpix), balfilename)
-    try: 
-        bhdu = fits.open(balfile) 
-    except FileNotFoundError:
-        print(f"Warning: Did not find {balfile}")
-        print(f"Skipping {healpix}") 
-        continue
+        healpixels = calculate_healpix_vectorized(qcat['TARGET_RA'], qcat['TARGET_DEC'], nside=64)
 
-    bcat = bhdu['BALCAT'].data
+    # Construct a list of unique healpix pixels
+    healpixlist = np.unique(healpixels)
 
-    hmask = healpixels == healpix  # mask of everything in qcat in this healpix
+    # Construct an array of indices for the QSO catalog
+    hindxs = np.arange(0, len(qcat), dtype=int)
 
     if args.verbose: 
-        print("Processing: ", healpix, balfile) 
+        print(f"Found {len(healpixlist)} unique healpix")
 
-    indxs = hindxs[hmask] # indices in qcat that are in pixel healpix
-    targids = qcat['TARGETID'][hmask] # targetids of quasars in pixel healpix, same order
+    # Setup logging
+    if args.mock: 
+        logfile = os.path.join(args.baldir, "logfile-mock.txt")
+    else: 
+        logfile = os.path.join(args.baldir, f"logfile-{args.survey}-{args.moon}.txt")
 
-    for i, targetid in enumerate(bhdu['BALCAT'].data['TARGETID']):
-        ind = np.where(targetid == targids)[0]
-        if len(ind) > 0:
-            qindex = indxs[ind[0]]
-            nmatch += 1
-            balcopy(qcat[qindex], bhdu['BALCAT'].data[i])
-            # print(i, targetid, qcat['TARGETID'][ind[0]], qcat['Z'][ind[0]], ind[0], qcat['BALMASK'][ind[0]], qcat['BI_CIV'][ind[0]])
-    f.write("{0}: {1} {2}\n".format(balfilename, len(bcat), nmatch) )
+    # Write log header
+    try:
+        lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getlogin()}\n"
+    except:
+        try:
+            lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('USER')}\n"
+        except:
+            try:
+                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('LOGNAME')}\n"
+            except:
+                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT\n"
+    
+    with open(logfile, 'a') as f:
+        f.write(lastupdate)
+        f.write(" ".join(sys.argv) + '\n')
+        f.write("Healpix NQSOs Nmatches\n")
 
-f.close()
+    # Process healpix in parallel batches
+    if args.nproc > 1 and len(healpixlist) > 1:
+        # Split healpix into batches for parallel processing
+        batch_size = max(1, min(args.chunk_size, len(healpixlist) // (args.nproc * 4)))
+        healpix_batches = [healpixlist[i:i+batch_size] for i in range(0, len(healpixlist), batch_size)]
+        
+        if args.verbose:
+            print(f"Processing {len(healpixlist)} healpix in {len(healpix_batches)} batches using {args.nproc} processes")
+        
+        all_results = []
+        with ProcessPoolExecutor(max_workers=args.nproc) as executor:
+            # Submit all batches
+            future_to_batch = {
+                executor.submit(process_healpix_batch, batch, args, qcat, healpixels, hindxs): batch 
+                for batch in healpix_batches
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_batch):
+                try:
+                    batch_results = future.result()
+                    all_results.extend(batch_results)
+                    
+                    if args.verbose:
+                        batch = future_to_batch[future]
+                        print(f"Completed batch with {len(batch)} healpix")
+                except Exception as e:
+                    batch = future_to_batch[future]
+                    print(f"Error processing batch with {len(batch)} healpix: {e}")
+    else:
+        # Sequential processing
+        all_results = process_healpix_batch(healpixlist, args, qcat, healpixels, hindxs)
 
-# Apply redshift range mask
-zmask = qcat['Z'] >= bc.BAL_ZMIN
-zmask = zmask*(qcat['Z'] <= bc.BAL_ZMAX)
-zmask = ~zmask # check to True for out of redshift range
-zbit = 2*np.ones(len(zmask), dtype=np.ubyte) # bitmask for out of redshift range
-qcat['BALMASK'][zmask] += zbit[zmask]
+    # Write results to log file
+    with open(logfile, 'a') as f:
+        for balfilename, nqsos, nmatch in all_results:
+            f.write(f"{balfilename}: {nqsos} {nmatch}\n")
 
-qhdu[1].header['EXTNAME'] = 'ZCATALOG'
-qhdu.writeto(outcat, overwrite=True)
-print("Wrote ", outcat) 
+    # Apply redshift range mask
+    zmask = qcat['Z'] >= bc.BAL_ZMIN
+    zmask = zmask*(qcat['Z'] <= bc.BAL_ZMAX)
+    zmask = ~zmask # check to True for out of redshift range
+    zbit = 2*np.ones(len(zmask), dtype=np.ubyte) # bitmask for out of redshift range
+    qcat['BALMASK'][zmask] += zbit[zmask]
+
+    # Write final catalog using fitsio for better performance
+    fitsio.write(outcat, qcat, extname='ZCATALOG', clobber=True)
+    
+    if args.verbose:
+        print(f"Wrote final catalog: {outcat}")
+        total_matches = sum(nmatch for _, _, nmatch in all_results)
+        print(f"Total matches: {total_matches}")
+
+    print(f"Wrote {outcat}")
+
+if __name__ == "__main__":
+    main() 

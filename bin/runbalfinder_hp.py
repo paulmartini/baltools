@@ -6,6 +6,8 @@ catalog is generated per healpix. The catalogs are put in a directory
 structure that matches the structure of the data release. 
 Use the separate script buildbalcat.py to create a BAL catalog for a 
 corresponding QSO catalog. 
+
+OPTIMIZED VERSION for NERSC systems with high core counts
 '''
 
 import os
@@ -14,12 +16,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from glob import glob
+import fitsio
 
 from time import gmtime, strftime
 import argparse
 from collections import defaultdict
 import desispec.io
 from desispec.coaddition import coadd_cameras
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 
 import baltools
 from baltools import balconfig as bc
@@ -30,6 +34,19 @@ from baltools import utils
 from multiprocessing import Pool
 
 os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
+
+class FileCache:
+    """Cache for file existence checks to reduce I/O overhead"""
+    def __init__(self):
+        self._cache = {}
+    
+    def exists(self, filepath):
+        if filepath not in self._cache:
+            self._cache[filepath] = os.path.isfile(filepath)
+        return self._cache[filepath]
+    
+    def clear(self):
+        self._cache.clear()
 
 def parse(options=None): 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -80,6 +97,12 @@ def parse(options=None):
     parser.add_argument('--tids', default=False, required=False, action='store_true',
                     help = 'Read only QSO TARGETIDs') 
 
+    parser.add_argument('--chunk-size', type=int, default=50, required=False,
+                        help='Chunk size for parallel processing (default: 50)')
+
+    parser.add_argument('--file-discovery-workers', type=int, default=8, required=False,
+                        help='Number of workers for parallel file discovery (default: 8)')
+
     if options is None: 
         args  = parser.parse_args()
     else: 
@@ -87,6 +110,122 @@ def parse(options=None):
 
     return args 
 
+def discover_healpix_parallel(dataroot, n_workers=8):
+    """Discover healpix directories in parallel"""
+    def scan_directory(subdir):
+        healpix_dirs = []
+        if os.path.isdir(subdir):
+            for item in os.listdir(subdir):
+                full_path = os.path.join(subdir, item)
+                if os.path.isdir(full_path):
+                    healpix_dirs.append(item)
+        return healpix_dirs
+    
+    # Get all subdirectories
+    try:
+        subdirs = [os.path.join(dataroot, d) for d in os.listdir(dataroot) 
+                   if os.path.isdir(os.path.join(dataroot, d))]
+    except FileNotFoundError:
+        print(f"Warning: Data root directory {dataroot} not found")
+        return []
+    
+    if not subdirs:
+        return []
+    
+    healpixels = []
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        # Submit all directory scans
+        future_to_subdir = {executor.submit(scan_directory, subdir): subdir for subdir in subdirs}
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_subdir):
+            try:
+                result = future.result()
+                healpixels.extend(result)
+            except Exception as e:
+                subdir = future_to_subdir[future]
+                print(f"Error scanning directory {subdir}: {e}")
+    
+    return healpixels
+
+def process_healpix_chunk(healpix_chunk, args, file_cache=None):
+    """Process a chunk of healpix pixels"""
+    if file_cache is None:
+        file_cache = FileCache()
+    
+    results = []
+    for healpix in healpix_chunk:
+        result = findbals_one_healpix_optimized(healpix, args, file_cache)
+        results.append(result)
+    
+    return results
+
+def findbals_one_healpix_optimized(healpix, args, file_cache=None):
+    """Optimized version of findbals_one_healpix with caching and early exits"""
+    if file_cache is None:
+        file_cache = FileCache()
+    
+    skiphealpix = False
+    hpdir = utils.gethpdir(healpix) 
+    
+    if args.mock: 
+        coaddfilename = f"spectra-16-{healpix}.fits"
+        balfilename = coaddfilename.replace('spectra-16-', 'baltable-16-')
+        altzdir = os.path.join(args.altzdir, 'spectra-16', hpdir, healpix) 
+    else: 
+        coaddfilename = f"coadd-{args.survey}-{args.moon}-{healpix}.fits"
+        balfilename = coaddfilename.replace('coadd-', 'baltable-')
+        altzdir = os.path.join(args.altzdir, "healpix", args.survey, args.moon, hpdir, healpix) 
+
+    zfilename = balfilename.replace('baltable-', args.zfileroot+"-")
+    indir = os.path.join(args.dataroot, hpdir, healpix)
+    outdir = os.path.join(args.outroot, hpdir, healpix)
+
+    coaddfile = os.path.join(indir, coaddfilename) 
+    balfile = os.path.join(outdir, balfilename) 
+    zfile = balfile.replace('baltable-', args.zfileroot+"-")
+
+    # Early exit if output exists and not clobbering
+    if file_cache.exists(balfile) and not args.clobber:
+        return healpix, None
+
+    # Check to see if zfile exists -- if not, skip
+    if not file_cache.exists(zfile): 
+        skiphealpix = True
+
+    if args.verbose:
+        print(f"Coadd file: {coaddfile}")
+        print(f"BAL file: {balfile}")
+        if args.altzdir is not None: 
+            print(f"Redshift directory: {altzdir}")
+        if skiphealpix: 
+            print(f"Did not find {zfile}, so skipping healpix {healpix}")
+
+    errortype = None
+    if not file_cache.exists(balfile) or args.clobber:
+        try:
+            if not skiphealpix: 
+                if args.verbose:
+                    print(f"About to run db.desibalfinder with verbose={args.verbose} and altbaldir={outdir} and zfileroot={args.zfileroot}")
+                db.desibalfinder(
+                    coaddfile, 
+                    altbaldir=outdir, 
+                    altzdir=altzdir, 
+                    zfileroot=args.zfileroot, 
+                    overwrite=args.clobber, 
+                    verbose=args.verbose, 
+                    release=args.release, 
+                    usetid=args.tids, 
+                    alttemp=args.alttemp
+                )
+            else: 
+                errortype = f"Did not find redshift catalog {zfile}"
+        except Exception as e:
+            if args.verbose:
+                print(f"An error occurred at healpix {healpix}: {e}")
+            errortype = str(e)
+
+    return healpix, errortype
 
 def main(args=None): 
 
@@ -109,25 +248,36 @@ def main(args=None):
     if args.outdir is not None:
         print(f"Warning: --outdir is deprecated. Using {outroot} based on altzdir parameter") 
     
-    # All possible healpix --
-    healpixdirs = glob(dataroot + "/*/*")
-    healpixels = []  # list of all available healpix
-    for healpixdir in healpixdirs:
-        healpixels.append(healpixdir[healpixdir.rfind('/')+1::])
+    # Discover healpix directories in parallel
+    if args.verbose:
+        print(f"Discovering healpix directories in {dataroot} using {args.file_discovery_workers} workers")
+    
+    healpixels = discover_healpix_parallel(dataroot, n_workers=args.file_discovery_workers)
+    
+    if args.verbose:
+        print(f"Found {len(healpixels)} healpix directories")
     
     # Requested healpix
     inputhealpixels = args.healpix
     
-    altzdir = None
-    
     # Check that all requested healpix exist
     if inputhealpixels is not None:
         for inputhealpixel in inputhealpixels: 
-            assert(str(inputhealpixel) in healpixels), "Healpix {} not available".format(inputhealpixel)
+            if str(inputhealpixel) not in healpixels:
+                print(f"Warning: Healpix {inputhealpixel} not available in {dataroot}")
+        # Filter to only available healpix
+        inputhealpixels = [h for h in inputhealpixels if str(h) in healpixels]
     else:
         inputhealpixels = healpixels
     
+    if not inputhealpixels:
+        print("No healpix to process!")
+        return
+    
     # Create/confirm output healpix directories exist
+    if args.verbose:
+        print(f"Creating output directories for {len(inputhealpixels)} healpix")
+    
     for inputhealpixel in inputhealpixels: 
         hpdir = utils.gethpdir(inputhealpixel)
         healpixdir = os.path.join(outroot, hpdir, inputhealpixel) 
@@ -138,106 +288,95 @@ def main(args=None):
     errortypes = []
     
     outlog = os.path.join(outroot, args.logfile)
-    f = open(outlog, 'a') 
+    
+    # Write log header
     try: 
-        lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getlogin())
+        lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getlogin()}\n"
     except: 
         try: 
-            lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('USER'))
+            lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('USER')}\n"
         except: 
             try: 
-                lastupdate = "Last updated {0} UT by {1}\n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime()), os.getenv('LOGNAME'))
+                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('LOGNAME')}\n"
             except: 
                 print("Error with tagging log file") 
-                lastupdate = "Last updated {0} UT \n".format(strftime("%Y-%m-%d %H:%M:%S", gmtime())) 
+                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT\n"
     
-    commandline = " ".join(sys.argv)
-    f.write(lastupdate)
-    f.write(commandline+'\n')
+    with open(outlog, 'a') as f:
+        f.write(lastupdate)
+        f.write(" ".join(sys.argv) + '\n')
 
-    if args.nproc > 1: 
-        func_args = [ {"healpix": healpix , \
-                       "args": args, \
-                       "healpixels": inputhealpixels, \
-                       "dataroot": dataroot, \
-                       "outroot": outroot \
-                    } for ih,healpix in enumerate(inputhealpixels) ]
-        with Pool(args.nproc) as pool: 
-            results = pool.map(_func, func_args)
+    # Add dataroot and outroot to args for use in worker functions
+    args.dataroot = dataroot
+    args.outroot = outroot
+
+    # Process healpix in parallel chunks
+    if args.nproc > 1 and len(inputhealpixels) > 1:
+        # Split healpix into chunks for parallel processing
+        chunk_size = max(1, min(args.chunk_size, len(inputhealpixels) // (args.nproc * 2)))
+        healpix_chunks = [inputhealpixels[i:i+chunk_size] for i in range(0, len(inputhealpixels), chunk_size)]
+        
+        if args.verbose:
+            print(f"Processing {len(inputhealpixels)} healpix in {len(healpix_chunks)} chunks using {args.nproc} processes")
+        
+        all_results = []
+        with ProcessPoolExecutor(max_workers=args.nproc) as executor:
+            # Submit all chunks
+            future_to_chunk = {
+                executor.submit(process_healpix_chunk, chunk, args): chunk 
+                for chunk in healpix_chunks
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_chunk):
+                try:
+                    chunk_results = future.result()
+                    all_results.extend(chunk_results)
+                    
+                    if args.verbose:
+                        chunk = future_to_chunk[future]
+                        print(f"Completed chunk with {len(chunk)} healpix")
+                except Exception as e:
+                    chunk = future_to_chunk[future]
+                    print(f"Error processing chunk with {len(chunk)} healpix: {e}")
+                    # Add error results for this chunk
+                    for healpix in chunk:
+                        all_results.append((healpix, str(e)))
     else: 
-        for ih,healpix in enumerate(inputhealpixels) : 
-            results = findbals_one_healpix(healpix)
+        # Sequential processing
+        all_results = []
+        for healpix in inputhealpixels:
+            result = findbals_one_healpix_optimized(healpix, args)
+            all_results.append(result)
 
-    lresults = list(results) 
+    # Process results
+    for healpix, errortype in all_results:
+        if errortype is not None: 
+            issuehealpixels.append(healpix) 
+            errortypes.append(errortype) 
 
-    for i in range(len(lresults)): 
-        if lresults[i][1] is not None: 
-            issuehealpixels.append(lresults[i][0]) 
-            errortypes.append(lresults[i][1]) 
-
-    outstr = "List of healpix with errors and error types: \n"
-    f.write(outstr) 
-    for i in range(len(issuehealpixels)):
-        f.write("{} : {}\n".format(issuehealpixels[i], errortypes[i]))
+    # Write error summary to log
+    with open(outlog, 'a') as f:
+        f.write("List of healpix with errors and error types: \n")
+        for i in range(len(issuehealpixels)):
+            f.write(f"{issuehealpixels[i]} : {errortypes[i]}\n")
     
-    f.close()
-    print(f"Wrote output log {outlog}") 
-
+    if args.verbose:
+        print(f"Wrote output log {outlog}")
+        print(f"Processed {len(all_results)} healpix, {len(issuehealpixels)} had errors")
 
 def _func(arg): 
-    """ Used for multiprocessing.Pool """
-    return findbals_one_healpix(**arg)
-
+    """ Used for multiprocessing.Pool - kept for backward compatibility """
+    return findbals_one_healpix_optimized(**arg)
 
 def findbals_one_healpix(healpix, args, healpixels, dataroot, outroot): 
-
-    skiphealpix = False
-    hpdir = utils.gethpdir(healpix) 
-    if args.mock: 
-        coaddfilename = "spectra-16-{0}.fits".format(healpix) 
-        balfilename = coaddfilename.replace('spectra-16-', 'baltable-16-')
-        altzdir = os.path.join(args.altzdir, 'spectra-16', hpdir, healpix) 
-    else: 
-        coaddfilename = "coadd-{0}-{1}-{2}.fits".format(args.survey, args.moon, healpix) 
-        balfilename = coaddfilename.replace('coadd-', 'baltable-')
-        altzdir = os.path.join(args.altzdir, 'healpix', args.survey, args.moon, hpdir, healpix) 
-
-    zfilename = balfilename.replace('baltable-', args.zfileroot+"-")
-    indir = os.path.join(dataroot, hpdir, healpix)
-    outdir = os.path.join(outroot, hpdir, healpix)
-
-    coaddfile = os.path.join(indir, coaddfilename) 
-    balfile = os.path.join(outdir, balfilename) 
-    zfile = balfile.replace('baltable-', args.zfileroot+"-")
-
-    # Check to see if zfile exists -- if not, skip
-    if not os.path.isfile(zfile): 
-        skiphealpix = True
-
-    if args.verbose:
-        print("Coadd file: ", coaddfile)
-        print("BAL file: ", balfile)
-        if args.altzdir is not None: 
-            print("Redshift directory: ", altzdir)
-        if skiphealpix: 
-            print("Did not find {0}, so skipping healpix {1}".format(zfile, healpix))
-
-    errortype = None
-    if not os.path.isfile(balfile) or args.clobber:
-        try:
-            if not skiphealpix: 
-                print(f"About to run db.desibalfinder with verbose={args.verbose} and altbaldir={outdir} and zfileroot={args.zfileroot}") 
-                db.desibalfinder(coaddfile, altbaldir=outdir, altzdir=altzdir, zfileroot=args.zfileroot, overwrite=args.clobber, verbose=args.verbose, release=args.release, usetid=args.tids, alttemp=args.alttemp)
-            else: 
-                errortype = "Did not find redshift catalog {0}".format(zfile)
-                # issuehealpixels.append(healpix)
-                # errortypes.append(errortype)
-        except:
-            print("An error occured at healpix {}. Adding healpix to issuehealpixels list.".format(healpix))
-            errortype = sys.exc_info()[0]
-
-    return healpix, errortype
-
+    """Original function kept for backward compatibility"""
+    # Create a temporary args object with dataroot and outroot
+    temp_args = argparse.Namespace(**vars(args))
+    temp_args.dataroot = dataroot
+    temp_args.outroot = outroot
+    
+    return findbals_one_healpix_optimized(healpix, temp_args)
 
 if __name__ == "__main__":
     main()
