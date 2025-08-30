@@ -55,8 +55,8 @@ def match_targets_vectorized(qso_targetids, bal_targetids):
     
     return matches
 
-def process_healpix_batch(healpix_batch, args, qcat_indices, healpixels, baldir, survey, moon, mock):
-    """Process a batch of healpix pixels and return modifications to apply"""
+def process_healpix_batch_with_qcat(healpix_batch, args, qcat, healpixels, baldir, survey, moon, mock):
+    """Process a batch of healpix pixels with access to the full QSO catalog"""
     modifications = []  # List of (qcat_index, bal_data) tuples
     
     for healpix in healpix_batch:
@@ -73,18 +73,28 @@ def process_healpix_batch(healpix_batch, args, qcat_indices, healpixels, baldir,
             # Use fitsio for faster reading
             bcat = fitsio.read(balfile, ext='BALCAT')
         except (FileNotFoundError, OSError):
+            if args.verbose:
+                print(f"Warning: Did not find {balfile}")
             continue
 
         # Find QSOs in this healpix
         hmask = healpixels == healpix
-        healpix_qso_indices = qcat_indices[hmask]
-        healpix_targetids = np.arange(len(healpixels))[hmask]  # Use indices for matching
+        healpix_qso_indices = np.arange(len(healpixels))[hmask]
         
         if len(healpix_qso_indices) == 0:
             continue
 
+        # Get the actual TARGETIDs for QSOs in this healpix
+        healpix_targetids = qcat['TARGETID'][healpix_qso_indices]
+
+        if args.verbose:
+            print(f"Processing healpix {healpix}: {len(healpix_qso_indices)} QSOs, {len(bcat)} BAL entries")
+
         # Use vectorized matching for better performance
         matches = match_targets_vectorized(healpix_targetids, bcat['TARGETID'])
+        
+        if args.verbose and len(matches) > 0:
+            print(f"  Found {len(matches)} matches in healpix {healpix}")
         
         # Store modifications to apply later
         for qidx, bidx in matches:
@@ -214,7 +224,7 @@ def main():
         with ProcessPoolExecutor(max_workers=args.nproc) as executor:
             # Submit all batches
             future_to_batch = {
-                executor.submit(process_healpix_batch, batch, args, qcat_indices, healpixels, args.baldir, args.survey, args.moon, args.mock): batch 
+                executor.submit(process_healpix_batch_with_qcat, batch, args, qcat, healpixels, args.baldir, args.survey, args.moon, args.mock): batch 
                 for batch in healpix_batches
             }
             
@@ -232,7 +242,7 @@ def main():
                     print(f"Error processing batch with {len(batch)} healpix: {e}")
     else:
         # Sequential processing
-        all_modifications = process_healpix_batch(healpixlist, args, qcat_indices, healpixels, args.baldir, args.survey, args.moon, args.mock)
+        all_modifications = process_healpix_batch_with_qcat(healpixlist, args, qcat, healpixels, args.baldir, args.survey, args.moon, args.mock)
 
     # Apply all modifications to the QSO catalog
     if args.verbose:
