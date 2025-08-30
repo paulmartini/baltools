@@ -55,48 +55,43 @@ def match_targets_vectorized(qso_targetids, bal_targetids):
     
     return matches
 
-def process_healpix_batch(healpix_batch, args, qcat, healpixels, hindxs):
-    """Process a batch of healpix pixels"""
-    results = []
+def process_healpix_batch(healpix_batch, args, qcat_indices, healpixels, baldir, survey, moon, mock):
+    """Process a batch of healpix pixels and return modifications to apply"""
+    modifications = []  # List of (qcat_index, bal_data) tuples
     
     for healpix in healpix_batch:
-        nmatch = 0
         hpdir = utils.gethpdir(str(healpix))
         
-        if args.mock: 
+        if mock: 
             balfilename = f"baltable-16-{healpix}.fits"
-            balfile = os.path.join(args.baldir, 'spectra-16', hpdir, str(healpix), balfilename)
+            balfile = os.path.join(baldir, 'spectra-16', hpdir, str(healpix), balfilename)
         else: 
-            balfilename = f"baltable-{args.survey}-{args.moon}-{healpix}.fits"
-            balfile = os.path.join(args.baldir, "healpix", args.survey, args.moon, hpdir, str(healpix), balfilename)
+            balfilename = f"baltable-{survey}-{moon}-{healpix}.fits"
+            balfile = os.path.join(baldir, "healpix", survey, moon, hpdir, str(healpix), balfilename)
         
         try: 
             # Use fitsio for faster reading
             bcat = fitsio.read(balfile, ext='BALCAT')
         except (FileNotFoundError, OSError):
-            if args.verbose:
-                print(f"Warning: Did not find {balfile}")
             continue
 
-        hmask = healpixels == healpix  # mask of everything in qcat in this healpix
-
-        if args.verbose: 
-            print(f"Processing: {healpix} {balfile}")
-
-        indxs = hindxs[hmask] # indices in qcat that are in pixel healpix
-        targids = qcat['TARGETID'][hmask] # targetids of quasars in pixel healpix, same order
+        # Find QSOs in this healpix
+        hmask = healpixels == healpix
+        healpix_qso_indices = qcat_indices[hmask]
+        healpix_targetids = np.arange(len(healpixels))[hmask]  # Use indices for matching
+        
+        if len(healpix_qso_indices) == 0:
+            continue
 
         # Use vectorized matching for better performance
-        matches = match_targets_vectorized(targids, bcat['TARGETID'])
+        matches = match_targets_vectorized(healpix_targetids, bcat['TARGETID'])
         
+        # Store modifications to apply later
         for qidx, bidx in matches:
-            qindex = indxs[qidx]
-            nmatch += 1
-            balcopy(qcat[qindex], bcat[bidx])
-        
-        results.append((balfilename, len(bcat), nmatch))
+            qcat_index = healpix_qso_indices[qidx]
+            modifications.append((qcat_index, bcat[bidx]))
     
-    return results
+    return modifications
 
 os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
 
@@ -176,7 +171,7 @@ def main():
     healpixlist = np.unique(healpixels)
 
     # Construct an array of indices for the QSO catalog
-    hindxs = np.arange(0, len(qcat), dtype=int)
+    qcat_indices = np.arange(0, len(qcat), dtype=int)
 
     if args.verbose: 
         print(f"Found {len(healpixlist)} unique healpix")
@@ -205,6 +200,9 @@ def main():
         f.write("Healpix NQSOs Nmatches\n")
 
     # Process healpix in parallel batches
+    all_modifications = []
+    total_matches = 0
+    
     if args.nproc > 1 and len(healpixlist) > 1:
         # Split healpix into batches for parallel processing
         batch_size = max(1, min(args.chunk_size, len(healpixlist) // (args.nproc * 4)))
@@ -213,34 +211,51 @@ def main():
         if args.verbose:
             print(f"Processing {len(healpixlist)} healpix in {len(healpix_batches)} batches using {args.nproc} processes")
         
-        all_results = []
         with ProcessPoolExecutor(max_workers=args.nproc) as executor:
             # Submit all batches
             future_to_batch = {
-                executor.submit(process_healpix_batch, batch, args, qcat, healpixels, hindxs): batch 
+                executor.submit(process_healpix_batch, batch, args, qcat_indices, healpixels, args.baldir, args.survey, args.moon, args.mock): batch 
                 for batch in healpix_batches
             }
             
             # Collect results as they complete
             for future in as_completed(future_to_batch):
                 try:
-                    batch_results = future.result()
-                    all_results.extend(batch_results)
+                    batch_modifications = future.result()
+                    all_modifications.extend(batch_modifications)
                     
                     if args.verbose:
                         batch = future_to_batch[future]
-                        print(f"Completed batch with {len(batch)} healpix")
+                        print(f"Completed batch with {len(batch)} healpix, found {len(batch_modifications)} matches")
                 except Exception as e:
                     batch = future_to_batch[future]
                     print(f"Error processing batch with {len(batch)} healpix: {e}")
     else:
         # Sequential processing
-        all_results = process_healpix_batch(healpixlist, args, qcat, healpixels, hindxs)
+        all_modifications = process_healpix_batch(healpixlist, args, qcat_indices, healpixels, args.baldir, args.survey, args.moon, args.mock)
+
+    # Apply all modifications to the QSO catalog
+    if args.verbose:
+        print(f"Applying {len(all_modifications)} BAL property modifications to QSO catalog")
+    
+    for qcat_index, bal_data in all_modifications:
+        balcopy(qcat[qcat_index], bal_data)
+        total_matches += 1
 
     # Write results to log file
     with open(logfile, 'a') as f:
-        for balfilename, nqsos, nmatch in all_results:
-            f.write(f"{balfilename}: {nqsos} {nmatch}\n")
+        # Group modifications by healpix for logging
+        healpix_matches = defaultdict(int)
+        for qcat_index, _ in all_modifications:
+            healpix = healpixels[qcat_index]
+            healpix_matches[healpix] += 1
+        
+        for healpix, nmatch in healpix_matches.items():
+            if args.mock:
+                balfilename = f"baltable-16-{healpix}.fits"
+            else:
+                balfilename = f"baltable-{args.survey}-{args.moon}-{healpix}.fits"
+            f.write(f"{balfilename}: {nmatch} {nmatch}\n")
 
     # Apply redshift range mask
     zmask = qcat['Z'] >= bc.BAL_ZMIN
@@ -254,7 +269,6 @@ def main():
     
     if args.verbose:
         print(f"Wrote final catalog: {outcat}")
-        total_matches = sum(nmatch for _, _, nmatch in all_results)
         print(f"Total matches: {total_matches}")
 
     print(f"Wrote {outcat}")
