@@ -391,7 +391,7 @@ def calcbalparams(
         nmasked_prev = np.sum(calcmask)
         calcpcaout = fitpca(idata, ipca, calcmask)
         calcpcacoeffs = calcpcaout[:-1]
-        calcmodel = createpcatemplate(pcaeigen={'WAVE': balwave, **{f'E{i}': comp for i, comp in enumerate(ipca)}}, pcacoeffs=calcpcacoeffs)
+        calcmodel = np.dot(calcpcacoeffs, ipca)
         calcinfo = calculatebalinfo(idata, calcmodel, verbose=verbose)
         calcmask = baltomask(calcinfo, balwave)
         itr += 1
