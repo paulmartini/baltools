@@ -75,6 +75,12 @@ def determine_troughs(
     Identifies absorption troughs in a (typically smoothed) normalized spectrum.
     """
     start_indices, end_indices = [], []
+
+    # Refined Penalty: Use the square root of rchisq for a less aggressive penalty.
+    # Also, cap the penalty factor to prevent extreme values in very noisy spectra.
+    penalty_factor = min(np.sqrt(rchisq), 3.0)
+    noise_penalty = bc.ERROR_SCALING_FACTOR * norm_sigma * penalty_factor
+
     noise_penalty = bc.ERROR_SCALING_FACTOR * norm_sigma * rchisq
     expression = (1. - norm_flux / bc.CONTINUUM_THRESHOLD) - noise_penalty
 
