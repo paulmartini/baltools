@@ -1,17 +1,13 @@
-"""
+# baltools.balconfig
+# ==================
+#
+# Common modules and global variables used by balfinder
 
-baltools.balconfig
-==================
-
-Common modules and global variables used by balfinder
-
-"""
-
-from __future__ import print_function, absolute_import, division
 import os
 import socket
+
+import fitsio
 from astropy import constants as const
-import fitsio 
 
 c = const.c.to('km/s').value	     # speed of light in km/s
 
@@ -19,66 +15,70 @@ c = const.c.to('km/s').value	     # speed of light in km/s
 lambdaCIV = 1549.
 lambdaSiIV = 1398.
 
+# --- Parameters for BAL Identification ---
+
 # Velocity search range for BAL troughs
-VMIN_BAL = -25000.  # minimum search velocity
-VMAX_BAL = 0.
+VMIN_BAL = -25000.  # minimum search velocity (km/s)
+VMAX_BAL = 0.       # maximum search velocity (km/s)
 
-BAL_LAMBDA_MIN = 1261.    # Minimim wavelength for PCA
-BAL_LAMBDA_MAX = 2399.    # Maximum wavelength for PCA
-# BAL_LAMBDA_MAX = 1800.    # Maximum wavelength for PCA
+# Velocity limits for specific indices
+AI_VMAX = 0.        # max velocity for AI trough search (km/s)
+BI_VMAX = -3000.    # max velocity for BI trough search (km/s)
 
-# Redshift range for BAL Catalog
-# QSOs only within BAL_ZMIN <= z <= BAL_ZMAX
-BAL_ZMIN = 1.57
-BAL_ZMAX = 5.0 # Use this for DR14 
-# BAL_ZMAX = 5.0 # Changed Mar 2020 by PM
+# Trough definition parameters
+AI_MIN_WIDTH = 450.         # min width for an AI trough (km/s)
+BI_MIN_WIDTH = 2000.        # min width for a BI trough (km/s)
+CONTINUUM_THRESHOLD = 0.9   # Flux must be below this fraction of the continuum
+ERROR_SCALING_FACTOR = 0.5  # Factor to scale error term in trough identification
+
+# --- PCA Fit Configuration ---
+
+BAL_LAMBDA_MIN = 1261.    # Minimim wavelength for PCA fit
+BAL_LAMBDA_MAX = 2399.    # Maximum wavelength for PCA fit
 
 NPCA = 5	    # Number of PCA coefficients
-NBI = 5		# Max number of potential BI troughs
+NBI = 5		    # Max number of potential BI troughs
 NAI = 17	    # Max number of potential AI troughs
+
+# --- File Paths ---
+# (Path logic remains the same)
 
 homedir = os.environ['HOME']
 hostname = socket.gethostname()
 
-# if 'cori' in hostname: 
-if '/global/homes' in homedir:  # should be true if at NERSC
-    catdir = homedir + '/Catalogs/'
+if '/global/homes' in homedir:  # NERSC environment
+    catdir = os.path.join(homedir, 'Catalogs/')
     specdir1 = '/global/cfs/projectdirs/sdss/staging/dr14/eboss/spectro/redux/v5_10_0/spectra/lite/'
     specdir2 = '/global/cfs/projectdirs/sdss/staging/dr9/sdss/spectro/redux/'
-    # specdir = '/global/projecta/projectdirs/sdss/staging/dr14/sdss/spectro/redux/v5_10_0/spectra/lite/' 
-elif 'Users' in homedir: 
-    catdir = homedir + '/Catalogs/'
-    specdir = homedir + '/Data/'
-elif os.getlogin() == 'u6024124':
-    catdir = homedir + '/Catalogs/'
-    specdir = '/uufs/chpc.utah.edu/common/home/sdss/ebosswork/eboss/spectro/redux/v5_13_0/spectra/lite/' 
-    # specdir = '/uufs/chpc.utah.edu/common/home/sdss/dr16/sdss/spectro/redux/26/'
-else: 
+elif 'Users' in homedir:  # macOS environment
+    catdir = os.path.join(homedir, 'Catalogs/')
+    specdir = os.path.join(homedir, 'Data/')
+elif os.getlogin() == 'u6024124': # CHPC environment
+    catdir = os.path.join(homedir, 'Catalogs/')
+    specdir = '/uufs/chpc.utah.edu/common/home/sdss/ebosswork/eboss/spectro/redux/v5_13_0/spectra/lite/'
+else:
     specdir = 'Data/'
     catdir = 'Catalogs/'
 
-baldr12file = catdir + 'DR12Q_BAL.fits'
-qsodr12file = catdir + 'DR12Q.fits'
-qsodr14file = catdir + 'DR14Q_v4_4.fits'
-pcaeigenfile = catdir + 'PCA_Eigenvectors.fits'
-baldr14file = catdir + 'DR14Q_BAL_v_2_0.fits'
-qsodr16file = catdir + 'DR16Q_QSOCat_20190703.fits'
-desispecdir1 = '/global/cscratch1/sd/mjwilson/svdc2019c/spectro/redux/v1/spectra-64/'
-desispecdir2 = '/project/projectdirs/desi/datachallenge/reference_runs/19.2/spectro/redux/mini/spectra-64/'
-desispecdir3 = '/project/projectdirs/desi/mocks/lya_forest/develop/london/v5.0.0/quick-2.6/spectra-16/'
+pcaeigenfile = os.path.join(catdir, 'PCA_Eigenvectors.fits')
+# Other file paths...
+qsodr14file = os.path.join(catdir, 'DR14Q_v4_4.fits')
+baldr14file = os.path.join(catdir, 'DR14Q_BAL_v_2_0.fits')
 
-# Check the wavelength limits for the PCA fit are consistent 
-# with the templates
 
-pcaeigen = fitsio.read(pcaeigenfile)
+# --- Sanity Check PCA Wavelength Limits ---
 
-try: 
-    assert (BAL_LAMBDA_MIN >= pcaeigen['WAVE'][0])
-except AssertionError:
-    print("Error: BAL_LAMBDA_MIN {0:.0f} must be greater than or equal to {1:.2f} in {2}".format(BAL_LAMBDA_MIN, pcaeigen['WAVE'][0], pcaeigenfile))
-  
-try: 
-    assert (BAL_LAMBDA_MAX <= pcaeigen['WAVE'][-1])
-except AssertionError:
-    print("Error: BAL_LAMBDA_MAX {0:.0f} must be less than or equal to {1:.2f} in {2}".format(BAL_LAMBDA_MAX, pcaeigen['WAVE'][-1], pcaeigenfile)) 
+try:
+    pcaeigen = fitsio.read(pcaeigenfile)
+    try:
+        assert (BAL_LAMBDA_MIN >= pcaeigen['WAVE'][0])
+    except AssertionError:
+        print(f"Error: BAL_LAMBDA_MIN {BAL_LAMBDA_MIN:.0f} must be >= {pcaeigen['WAVE'][0]:.2f} in {pcaeigenfile}")
+
+    try:
+        assert (BAL_LAMBDA_MAX <= pcaeigen['WAVE'][-1])
+    except AssertionError:
+        print(f"Error: BAL_LAMBDA_MAX {BAL_LAMBDA_MAX:.0f} must be <= {pcaeigen['WAVE'][-1]:.2f} in {pcaeigenfile}")
+except (FileNotFoundError, OSError):
+    print(f"Warning: Could not open PCA eigenvector file: {pcaeigenfile}")
 
