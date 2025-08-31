@@ -166,7 +166,7 @@ def calculate_index(
 def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], verbose: bool = False) -> Dict:
     """
     Calculates BAL quantities, following the original script's logic flow
-    but using modernized helper functions.
+    but using modernized helper functions and safe division.
     """
     balwave, balspec, balerror = idata
     balinfo = initialize()
@@ -178,14 +178,19 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
     idx_max_ai = np.searchsorted(speed_civ, 0.)
 
     if idx_min_bal < idx_max_ai:
-        snr_slice = balspec[idx_min_bal:idx_max_ai] / balerror[idx_min_bal:idx_max_ai]
-        balinfo['SNR_CIV'] = np.median(snr_slice[np.isfinite(snr_slice)])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            snr_slice = balspec[idx_min_bal:idx_max_ai] / balerror[idx_min_bal:idx_max_ai]
+            balinfo['SNR_CIV'] = np.median(snr_slice[np.isfinite(snr_slice)])
 
-    # Normalize flux/error for CIV windows
-    norm_flux_ai = balspec[idx_min_bal:idx_max_ai] / model[idx_min_bal:idx_max_ai]
-    sigma_ai = balerror[idx_min_bal:idx_max_ai] / model[idx_min_bal:idx_max_ai]
-    norm_flux_bi = balspec[idx_min_bal:idx_max_bi] / model[idx_min_bal:idx_max_bi]
-    sigma_bi = balerror[idx_min_bal:idx_max_bi] / model[idx_min_bal:idx_max_bi]
+    # Normalize flux/error for CIV windows using safe division
+    model_ai_civ = model[idx_min_bal:idx_max_ai]
+    norm_flux_ai = np.divide(balspec[idx_min_bal:idx_max_ai], model_ai_civ, out=np.ones_like(model_ai_civ), where=model_ai_civ!=0)
+    sigma_ai = np.divide(balerror[idx_min_bal:idx_max_ai], model_ai_civ, out=np.full_like(model_ai_civ, np.inf), where=model_ai_civ!=0)
+    
+    model_bi_civ = model[idx_min_bal:idx_max_bi]
+    norm_flux_bi = np.divide(balspec[idx_min_bal:idx_max_bi], model_bi_civ, out=np.ones_like(model_bi_civ), where=model_bi_civ!=0)
+    sigma_bi = np.divide(balerror[idx_min_bal:idx_max_bi], model_bi_civ, out=np.full_like(model_bi_civ, np.inf), where=model_bi_civ!=0)
 
     # Step 1: Find CIV AI troughs
     start_ai_civ, end_ai_civ = determine_troughs(norm_flux_ai, sigma_ai, speed_civ[idx_min_bal:idx_max_ai], bc.AI_MIN_WIDTH, is_ai=True)
@@ -194,7 +199,10 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
     continuum_mask = np.ones_like(norm_flux_ai, dtype=bool)
     for s, e in zip(start_ai_civ, end_ai_civ):
         continuum_mask[s:e+1] = False
-    difference = np.mean(np.abs(model[idx_min_bal:idx_max_ai][continuum_mask] - balspec[idx_min_bal:idx_max_ai][continuum_mask]))
+    
+    difference = 0.0
+    if np.any(continuum_mask):
+        difference = np.mean(np.abs(model[idx_min_bal:idx_max_ai][continuum_mask] - balspec[idx_min_bal:idx_max_ai][continuum_mask]))
     
     # Step 3: Measure CIV AI troughs using the calculated difference
     for i in range(min(len(start_ai_civ), bc.NAI)):
@@ -203,7 +211,12 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
         balinfo['AI_CIV'] += ai
         balinfo['AI_CIV_ERR'] += ai_err
         balinfo['NCIV_450'] += 1
-        # ... (populate VMIN, VMAX, etc.)
+        balinfo['VMAX_CIV_450'][i] = -speed_civ[idx_min_bal:idx_max_ai][s]
+        balinfo['VMIN_CIV_450'][i] = -speed_civ[idx_min_bal:idx_max_ai][e]
+        min_flux = norm_flux_ai[s:e+1].min()
+        balinfo['FMIN_CIV_450'][i] = min_flux
+        min_flux_idx = np.where(norm_flux_ai[s:e+1] == min_flux)[0][0]
+        balinfo['POSMIN_CIV_450'][i] = -speed_civ[idx_min_bal:idx_max_ai][s:e+1][min_flux_idx]
     
     if balinfo['VMAX_CIV_450'][0] > 10000.: balinfo['TROUGH_10K'] = 1
 
@@ -215,7 +228,12 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
         balinfo['BI_CIV'] += bi
         balinfo['BI_CIV_ERR'] += bi_err
         balinfo['NCIV_2000'] += 1
-        # ... (populate VMIN, VMAX, etc.)
+        balinfo['VMAX_CIV_2000'][i] = -speed_civ[idx_min_bal:idx_max_bi][s]
+        balinfo['VMIN_CIV_2000'][i] = -speed_civ[idx_min_bal:idx_max_bi][e]
+        min_flux = norm_flux_bi[s:e+1].min()
+        balinfo['FMIN_CIV_2000'][i] = min_flux
+        min_flux_idx = np.where(norm_flux_bi[s:e+1] == min_flux)[0][0]
+        balinfo['POSMIN_CIV_2000'][i] = -speed_civ[idx_min_bal:idx_max_bi][s:e+1][min_flux_idx]
 
     # --- SiIV Calculations (if in bandpass) ---
     if balwave[0] <= bc.lambdaSiIV * (1. + bc.VMIN_BAL / bc.c):
@@ -224,11 +242,14 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
         idx_max_bi_siiv = np.searchsorted(speed_siiv, -3000.)
         idx_max_ai_siiv = np.searchsorted(speed_siiv, 0.)
 
-        # Normalize flux/error for SiIV windows
-        norm_flux_ai_siiv = balspec[idx_min_bal_siiv:idx_max_ai_siiv] / model[idx_min_bal_siiv:idx_max_ai_siiv]
-        sigma_ai_siiv = balerror[idx_min_bal_siiv:idx_max_ai_siiv] / model[idx_min_bal_siiv:idx_max_ai_siiv]
-        norm_flux_bi_siiv = balspec[idx_min_bal_siiv:idx_max_bi_siiv] / model[idx_min_bal_siiv:idx_max_bi_siiv]
-        sigma_bi_siiv = balerror[idx_min_bal_siiv:idx_max_bi_siiv] / model[idx_min_bal_siiv:idx_max_bi_siiv]
+        # Normalize flux/error for SiIV windows using safe division
+        model_ai_siiv = model[idx_min_bal_siiv:idx_max_ai_siiv]
+        norm_flux_ai_siiv = np.divide(balspec[idx_min_bal_siiv:idx_max_ai_siiv], model_ai_siiv, out=np.ones_like(model_ai_siiv), where=model_ai_siiv!=0)
+        sigma_ai_siiv = np.divide(balerror[idx_min_bal_siiv:idx_max_ai_siiv], model_ai_siiv, out=np.full_like(model_ai_siiv, np.inf), where=model_ai_siiv!=0)
+        
+        model_bi_siiv = model[idx_min_bal_siiv:idx_max_bi_siiv]
+        norm_flux_bi_siiv = np.divide(balspec[idx_min_bal_siiv:idx_max_bi_siiv], model_bi_siiv, out=np.ones_like(model_bi_siiv), where=model_bi_siiv!=0)
+        sigma_bi_siiv = np.divide(balerror[idx_min_bal_siiv:idx_max_bi_siiv], model_bi_siiv, out=np.full_like(model_bi_siiv, np.inf), where=model_bi_siiv!=0)
 
         # Find and Measure SiIV AI troughs, using CIV difference
         start_ai_siiv, end_ai_siiv = determine_troughs(norm_flux_ai_siiv, sigma_ai_siiv, speed_siiv[idx_min_bal_siiv:idx_max_ai_siiv], bc.AI_MIN_WIDTH, is_ai=True)
@@ -238,7 +259,12 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
             balinfo['AI_SIIV'] += ai
             balinfo['AI_SIIV_ERR'] += ai_err
             balinfo['NSIIV_450'] += 1
-            # ... (populate VMIN, VMAX, etc.)
+            balinfo['VMAX_SIIV_450'][i] = -speed_siiv[idx_min_bal_siiv:idx_max_ai_siiv][s]
+            balinfo['VMIN_SIIV_450'][i] = -speed_siiv[idx_min_bal_siiv:idx_max_ai_siiv][e]
+            min_flux = norm_flux_ai_siiv[s:e+1].min()
+            balinfo['FMIN_SIIV_450'][i] = min_flux
+            min_flux_idx = np.where(norm_flux_ai_siiv[s:e+1] == min_flux)[0][0]
+            balinfo['POSMIN_SIIV_450'][i] = -speed_siiv[idx_min_bal_siiv:idx_max_ai_siiv][s:e+1][min_flux_idx]
             
         # Find and Measure SiIV BI troughs, using CIV difference
         start_bi_siiv, end_bi_siiv = determine_troughs(norm_flux_bi_siiv, sigma_bi_siiv, speed_siiv[idx_min_bal_siiv:idx_max_bi_siiv], bc.BI_MIN_WIDTH, is_ai=False)
@@ -248,7 +274,12 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
             balinfo['BI_SIIV'] += bi
             balinfo['BI_SIIV_ERR'] += bi_err
             balinfo['NSIIV_2000'] += 1
-            # ... (populate VMIN, VMAX, etc.)
+            balinfo['VMAX_SIIV_2000'][i] = -speed_siiv[idx_min_bal_siiv:idx_max_bi_siiv][s]
+            balinfo['VMIN_SIIV_2000'][i] = -speed_siiv[idx_min_bal_siiv:idx_max_bi_siiv][e]
+            min_flux = norm_flux_bi_siiv[s:e+1].min()
+            balinfo['FMIN_SIIV_2000'][i] = min_flux
+            min_flux_idx = np.where(norm_flux_bi_siiv[s:e+1] == min_flux)[0][0]
+            balinfo['POSMIN_SIIV_2000'][i] = -speed_siiv[idx_min_bal_siiv:idx_max_bi_siiv][s:e+1][min_flux_idx]
 
     # Final sqrt on error terms
     for key in balinfo:
@@ -256,7 +287,6 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
             balinfo[key] = np.sqrt(balinfo[key]) if balinfo[key] > 0 else 0.0
 
     return balinfo
-
 
 
 # ==============================================================================
