@@ -76,7 +76,7 @@ The `runbal.sh` script has been updated with optimization parameters:
 
 ```bash
 # Optimization parameters for NERSC systems
-export NPROC=128  # Number of processes (can be up to 256 for 128 CPUs)
+export NPROC=256  # Number of processes (256 logical CPUs per node: 2 CPUs × 64 cores × 2 threads)
 export CHUNK_SIZE=50  # Chunk size for parallel processing
 export FILE_DISCOVERY_WORKERS=16  # Workers for file discovery
 ```
@@ -85,17 +85,17 @@ export FILE_DISCOVERY_WORKERS=16  # Workers for file discovery
 
 ### Basic Usage (with optimizations)
 ```bash
-# Split afterburner with 128 processes
+# Split afterburner with 256 processes
 splitafterburner_hp.py --qsocat qso_catalog.fits --altzdir /path/to/output \
-    --nproc 128 --chunk-size 50 -v
+    --nproc 256 --chunk-size 50 -v
 
 # Run BAL finder with optimized parameters
 runbalfinder_hp.py -r loa -s main -m dark -a /path/to/altzdir \
-    --nproc 128 --chunk-size 50 --file-discovery-workers 16 -v
+    --nproc 256 --chunk-size 50 --file-discovery-workers 16 -v
 
 # Append BAL info with parallel processing
 appendbalinfo_hp.py -q qso_catalog.fits -b /path/to/baldir \
-    --nproc 128 --chunk-size 100 -v
+    --nproc 256 --chunk-size 100 -v
 ```
 
 ### Tuning Parameters for Different Systems

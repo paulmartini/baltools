@@ -22,7 +22,7 @@ export outdir=/global/cfs/cdirs/desi/users/martini/bal-catalogs/loa
 export outcat=QSO_cat_loa_main_dark_healpix_v2-altbal.fits
 
 # Optimization parameters for NERSC systems
-export NPROC=128  # Number of processes (can be up to 256 for 128 CPUs)
+export NPROC=256  # Number of processes (256 logical CPUs per node: 2 CPUs × 64 cores × 2 threads)
 export CHUNK_SIZE=50  # Chunk size for parallel processing
 export FILE_DISCOVERY_WORKERS=16  # Workers for file discovery
 

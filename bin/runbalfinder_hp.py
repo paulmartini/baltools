@@ -294,8 +294,8 @@ def parse_arguments(options: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument('-l', '--logfile', type=str, default='logfile.txt', required=False,
                         help='Name of log file written to altzdir, default is logfile.txt')
 
-    parser.add_argument('--nproc', type=int, default=64, required=False,
-                        help='Number of processes')
+    parser.add_argument('--nproc', type=int, default=256, required=False,
+                        help='Number of processes (default: 256 for NERSC nodes)')
 
     parser.add_argument('-c', '--clobber', default=False, required=False, action='store_true',
                         help='Clobber (overwrite) BAL catalog if it already exists?')

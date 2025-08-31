@@ -274,8 +274,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('-t', '--alttemp', default=False, required=False, action='store_true',
                         help='Use alternate components made by Allyson Brodzeller')
 
-    parser.add_argument('--nproc', type=int, default=64, required=False,
-                        help='Number of processes for parallel processing (default: 64)')
+    parser.add_argument('--nproc', type=int, default=256, required=False,
+                        help='Number of processes for parallel processing (default: 256 for NERSC nodes)')
 
     parser.add_argument('--chunk-size', type=int, default=100, required=False,
                         help='Chunk size for parallel processing (default: 100)')

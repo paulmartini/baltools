@@ -261,8 +261,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('-v', '--verbose', default=False, required=False, action='store_true', 
                         help='Provide verbose output?')
 
-    parser.add_argument('--nproc', type=int, default=64, required=False,
-                        help='Number of processes for parallel processing (default: 64)')
+    parser.add_argument('--nproc', type=int, default=256, required=False,
+                        help='Number of processes for parallel processing (default: 256 for NERSC nodes)')
 
     parser.add_argument('--chunk-size', type=int, default=1000, required=False,
                         help='Chunk size for memory-efficient processing (default: 1000)')
