@@ -5,7 +5,6 @@
 
 import os
 import socket
-
 import fitsio
 from astropy import constants as const
 
@@ -29,9 +28,7 @@ BI_VMAX = -3000.    # max velocity for BI trough search (km/s)
 AI_MIN_WIDTH = 450.         # min width for an AI trough (km/s)
 BI_MIN_WIDTH = 2000.        # min width for a BI trough (km/s)
 CONTINUUM_THRESHOLD = 0.9   # Flux must be below this fraction of the continuum
-ERROR_SCALING_FACTOR = 0.25  # Factor to scale error term in trough identification
-
-SMOOTHING_WIDTH = 3  # Width in pixels for boxcar smoothing before trough finding.
+ERROR_SCALING_FACTOR = 0.5  # Factor to scale error term in trough identification
 
 # --- PCA Fit Configuration ---
 
@@ -47,7 +44,6 @@ NBI = 5		    # Max number of potential BI troughs
 NAI = 17	    # Max number of potential AI troughs
 
 # --- File Paths ---
-# (Path logic remains the same)
 
 homedir = os.environ['HOME']
 hostname = socket.gethostname()
