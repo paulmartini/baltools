@@ -69,13 +69,15 @@ def determine_troughs(
     norm_sigma: NDArray[np.float64],
     speed: NDArray[np.float64],
     min_width: float,
+    rchisq: float,  # Add rchisq parameter
     is_ai: bool = False
 ) -> Tuple[List[int], List[int]]:
     """
     Identifies absorption troughs in a (typically smoothed) normalized spectrum.
     """
-    start_indices, end_indices = [], []
-    expression = (1. - norm_flux / bc.CONTINUUM_THRESHOLD) - bc.ERROR_SCALING_FACTOR * norm_sigma
+    # Incorporate rchisq into the expression
+    noise_penalty = bc.ERROR_SCALING_FACTOR * norm_sigma * rchisq
+    expression = (1. - norm_flux / bc.CONTINUUM_THRESHOLD) - noise_penalty
 
     if np.median(norm_flux) < np.median(norm_sigma):
         return [], []
