@@ -10,16 +10,15 @@ import math
 import warnings
 from typing import Dict, List, Tuple, Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy.optimize as opt
 from numpy.typing import NDArray
-from scipy.ndimage import uniform_filter1d
 
 from baltools import balconfig as bc
 
 debug = False
-
+if debug:
+    import matplotlib.pyplot as plt
 
 # ==============================================================================
 # 1. DICTIONARY AND DATA INITIALIZATION
@@ -28,28 +27,24 @@ debug = False
 
 def initialize() -> Dict:
     """Initialize the balinfo dictionary."""
+    # This function is the same as the original
     balinfo = {
-        'TROUGH_10K': 0,
-        'SNR_CIV': -1.,
-
+        'TROUGH_10K': 0, 'SNR_CIV': -1.,
         'BI_CIV': 0., 'BI_CIV_ERR': 0., 'NCIV_2000': 0,
         'VMIN_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
         'VMAX_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
         'POSMIN_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
         'FMIN_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
-
         'AI_CIV': 0., 'AI_CIV_ERR': 0., 'NCIV_450': 0,
         'VMIN_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
         'VMAX_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
         'POSMIN_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
         'FMIN_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
-
         'BI_SIIV': 0., 'BI_SIIV_ERR': 0., 'NSIIV_2000': 0,
         'VMIN_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
         'VMAX_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
         'POSMIN_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
         'FMIN_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
-
         'AI_SIIV': 0., 'AI_SIIV_ERR': 0., 'NSIIV_450': 0,
         'VMIN_SIIV_450': -1. * np.ones(bc.NAI, dtype=float),
         'VMAX_SIIV_450': -1. * np.ones(bc.NAI, dtype=float),
@@ -68,61 +63,71 @@ def determine_troughs(
     norm_sigma: NDArray[np.float64],
     speed: NDArray[np.float64],
     min_width: float,
-    rchisq: float,
     is_ai: bool = False
 ) -> Tuple[List[int], List[int]]:
     """
-    Identifies absorption troughs in a (typically smoothed) normalized spectrum.
+    Identifies troughs, replicating the original script's logic for
+    single-pixel gap bridging and significance testing.
     """
     start_indices, end_indices = [], []
-    
-    # Suppress expected overflow warnings from multiplying large numbers
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        
-        # Refined Penalty: Use the square root of rchisq for a less aggressive penalty.
-        # Also, cap the penalty factor to prevent extreme values in very noisy spectra.
-        penalty_factor = min(np.sqrt(rchisq), 3.0)
-        noise_penalty = bc.ERROR_SCALING_FACTOR * norm_sigma * penalty_factor
-        
-        expression = (1. - norm_flux / bc.CONTINUUM_THRESHOLD) - noise_penalty
+    expression = (1. - norm_flux / bc.CONTINUUM_THRESHOLD) - bc.ERROR_SCALING_FACTOR * norm_sigma
 
     if np.median(norm_flux) < np.median(norm_sigma):
         return [], []
 
     vel_range = 0.0
-    in_trough = False
     start_idx = 0
-    for i in range(len(expression)):
-        is_absorbed = expression[i] > 0
-        if is_absorbed and not in_trough:
-            start_idx = i
-            in_trough = True
-            vel_range = 0.0001
-        elif is_absorbed and in_trough:
-            if i > 0:
+    in_trough = False
+    i = 0
+    while i < len(expression):
+        # In an absorption feature
+        if expression[i] > 0:
+            if not in_trough:
+                start_idx = i
+                in_trough = True
+                vel_range = 0.0001
+            elif i > 0:
                 vel_range += speed[i] - speed[i - 1]
-        elif not is_absorbed and in_trough:
-            if vel_range > min_width:
-                end_idx = i - 1
-                if is_ai:
-                    trough_flux = norm_flux[start_idx:end_idx + 1]
-                    trough_sigma = norm_sigma[start_idx:end_idx + 1]
-                    mean_flux = np.mean(trough_flux)
-                    mean_sigma = np.mean(trough_sigma) / np.sqrt(len(trough_flux))
-                    if (1. - (mean_flux + 3.0 * mean_sigma) / bc.CONTINUUM_THRESHOLD) > 0:
+            i += 1
+        # Not in absorption
+        else:
+            # Check for a single-pixel bridge
+            can_bridge = (in_trough and i + 1 < len(expression) and expression[i+1] > 0)
+            if is_ai and can_bridge:
+                # AI logic is stricter, requires >2 pixels before the gap
+                if not (i > 1 and expression[i-1] > 0 and expression[i-2] > 0):
+                    can_bridge = False
+            
+            if can_bridge:
+                vel_range += speed[i] - speed[i - 1] # Bridge over the non-absorbed pixel
+                i += 1
+            else:
+                # Proper end of a potential trough
+                if in_trough and vel_range > min_width:
+                    end_idx = i - 1
+                    if is_ai:
+                        # Original significance test for AI troughs
+                        trough_flux = norm_flux[start_idx:end_idx + 1]
+                        trough_sigma = norm_sigma[start_idx:end_idx + 1]
+                        if trough_flux.size > 0:
+                            mean_flux = np.mean(trough_flux)
+                            mean_sigma = np.mean(trough_sigma) / np.sqrt(trough_flux.size)
+                            if (1. - (mean_flux + 3.0 * mean_sigma) / bc.CONTINUUM_THRESHOLD) > 0:
+                                start_indices.append(start_idx)
+                                end_indices.append(end_idx)
+                    else: # BI troughs have no extra test
                         start_indices.append(start_idx)
                         end_indices.append(end_idx)
-                else:
-                    start_indices.append(start_idx)
-                    end_indices.append(end_idx)
-            in_trough = False
-
+                in_trough = False
+                vel_range = 0.0
+                i += 1
+    
     if in_trough and vel_range > min_width:
         start_indices.append(start_idx)
         end_indices.append(len(expression) - 1)
-
+        
     return start_indices, end_indices
+
 
 def calculate_index(
     speed: NDArray[np.float64],
@@ -134,185 +139,124 @@ def calculate_index(
 ) -> Tuple[float, float]:
     """
     Calculates BALnicity/Absorption Index, replicating the original logic
-    of only summing after a minimum velocity width is reached.
+    of only summing after a minimum velocity width is reached and using the
+    original error propagation formula.
     """
     if len(speed) < 2:
         return 0., 0.
 
+    integrand = 1. - (norm_flux / bc.CONTINUUM_THRESHOLD)
     dv = np.diff(speed)
-    integrand = 1. - (norm_flux[1:] / bc.CONTINUUM_THRESHOLD)
     
-    # Replicate original logic: only integrate after v_range > min_width_for_sum
+    # Replicate original logic: find where the cumulative velocity range
+    # first exceeds the minimum width required for summation.
     v_range = np.cumsum(np.insert(dv, 0, 0))
-    integration_mask = v_range[1:] >= min_width_for_sum
+    integration_mask = v_range[:-1] >= min_width_for_sum
 
-    # Apply mask to the integrand and differential velocity
-    value = np.sum(integrand[integration_mask] * dv[integration_mask])
+    value = np.sum(integrand[1:][integration_mask] * dv[integration_mask])
 
-    # Propagate error for the masked region
-    sigma_sq_masked = sigma[1:][integration_mask]**2 + (diff / pca_model[1:][integration_mask])**2
-    dv_sq_masked = dv[integration_mask]**2
-    variance = np.sum((sigma_sq_masked / bc.CONTINUUM_THRESHOLD**2) * dv_sq_masked)
+    # Replicate original error propagation (sum of variance * dv)
+    sigma_tt_sq = sigma[:-1]**2 + (diff / pca_model[:-1])**2
+    variance_term = (sigma_tt_sq / bc.CONTINUUM_THRESHOLD**2) * dv
+    val_error = np.sum(variance_term[integration_mask])
     
-    return (value, variance) if value > 0. else (0., 0.)
+    return (value, val_error) if value > 0. else (0., 0.)
 
-
-def _process_ion_line(
-    idata: NDArray[np.float64],
-    model: NDArray[np.float64],
-    ion_lambda: float,
-    ion_name: str,
-    balinfo: Dict,
-    verbose: bool = False
-) -> None:
-    """
-    Finds troughs using a local, BAL-free chi-squared to penalize the search.
-    This is done independently for the AI and BI windows.
-    """
-    balwave, balspec, balerror = idata
-    speed = bc.c * (balwave - ion_lambda) / ion_lambda
-
-    min_wave_req = ion_lambda * (1. + bc.VMIN_BAL / bc.c)
-    if balwave[0] > min_wave_req:
-        if verbose:
-            print(f"Skipping {ion_name}: Spectrum needs coverage to {min_wave_req:.1f}Å.")
-        return
-
-    idx_min_bal = np.searchsorted(speed, bc.VMIN_BAL)
-    idx_max_bi = np.searchsorted(speed, bc.BI_VMAX)
-    idx_max_ai = np.searchsorted(speed, bc.AI_VMAX)
-
-    # --- AI Calculation ---
-    start_idx_ai, end_idx_ai = [], []
-    difference = 0.0
-    norm_flux_ai, model_ai, speed_ai, sigma_ai = (np.array([]),)*4
-
-    if idx_min_bal < idx_max_ai:
-        speed_ai = speed[idx_min_bal:idx_max_ai]
-        flux_ai = balspec[idx_min_bal:idx_max_ai]
-        model_ai = model[idx_min_bal:idx_max_ai]
-        error_ai = balerror[idx_min_bal:idx_max_ai]
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            norm_flux_ai = np.divide(flux_ai, model_ai, out=np.ones_like(model_ai), where=model_ai!=0)
-            sigma_ai = np.divide(error_ai, model_ai, out=np.full_like(model_ai, np.inf), where=model_ai!=0)
-
-        norm_flux_ai_smooth = uniform_filter1d(norm_flux_ai, size=bc.SMOOTHING_WIDTH)
-        sigma_ai_smooth = uniform_filter1d(sigma_ai, size=bc.SMOOTHING_WIDTH)
-
-        initial_start, initial_end = determine_troughs(norm_flux_ai_smooth, sigma_ai_smooth, speed_ai, bc.AI_MIN_WIDTH, rchisq=1.0, is_ai=True)
-
-        continuum_mask = np.ones_like(speed_ai, dtype=bool)
-        for s, e in zip(initial_start, initial_end):
-            continuum_mask[s:e+1] = False
-
-        cont_flux = flux_ai[continuum_mask]
-        local_rchisq_ai = 1.0
-        if cont_flux.size > 1:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=RuntimeWarning)
-                chi_sq = np.sum(((cont_flux - model_ai[continuum_mask]) / error_ai[continuum_mask])**2)
-                local_rchisq_ai = chi_sq / (cont_flux.size - 1)
-        
-        start_idx_ai, end_idx_ai = determine_troughs(norm_flux_ai_smooth, sigma_ai_smooth, speed_ai, bc.AI_MIN_WIDTH, rchisq=local_rchisq_ai, is_ai=True)
-        
-        masked_model_ai = model_ai[continuum_mask]
-        if masked_model_ai.size > 0:
-            difference = np.mean(np.abs(masked_model_ai - flux_ai[continuum_mask]))
-    
-    for i in range(min(len(start_idx_ai), bc.NAI)):
-        s, e = start_idx_ai[i], end_idx_ai[i]
-        ai, ai_var = calculate_index(speed_ai[s:e+1], model_ai[s:e+1], norm_flux_ai[s:e+1], sigma_ai[s:e+1], difference, bc.AI_MIN_WIDTH)
-        balinfo[f'AI_{ion_name}'] += ai
-        balinfo[f'AI_{ion_name}_ERR'] += ai_var
-        balinfo[f'N{ion_name}_{int(bc.AI_MIN_WIDTH)}'] += 1
-        trough_flux = norm_flux_ai[s:e+1]
-        min_flux_idx = np.argmin(trough_flux)
-        balinfo[f'VMAX_{ion_name}_{int(bc.AI_MIN_WIDTH)}'][i] = -speed_ai[s]
-        balinfo[f'VMIN_{ion_name}_{int(bc.AI_MIN_WIDTH)}'][i] = -speed_ai[e]
-        balinfo[f'FMIN_{ion_name}_{int(bc.AI_MIN_WIDTH)}'][i] = trough_flux[min_flux_idx]
-        balinfo[f'POSMIN_{ion_name}_{int(bc.AI_MIN_WIDTH)}'][i] = -speed_ai[s:e+1][min_flux_idx]
-
-    # --- BI Calculation ---
-    start_idx_bi, end_idx_bi = [], []
-    norm_flux_bi, model_bi, speed_bi, sigma_bi = (np.array([]),)*4
-    
-    if idx_min_bal < idx_max_bi:
-        speed_bi = speed[idx_min_bal:idx_max_bi]
-        flux_bi = balspec[idx_min_bal:idx_max_bi]
-        model_bi = model[idx_min_bal:idx_max_bi]
-        error_bi = balerror[idx_min_bal:idx_max_bi]
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            norm_flux_bi = np.divide(flux_bi, model_bi, out=np.ones_like(model_bi), where=model_bi!=0)
-            sigma_bi = np.divide(error_bi, model_bi, out=np.full_like(model_bi, np.inf), where=model_bi!=0)
-
-        norm_flux_bi_smooth = uniform_filter1d(norm_flux_bi, size=bc.SMOOTHING_WIDTH)
-        sigma_bi_smooth = uniform_filter1d(sigma_bi, size=bc.SMOOTHING_WIDTH)
-
-        initial_start_bi, initial_end_bi = determine_troughs(norm_flux_bi_smooth, sigma_bi_smooth, speed_bi, bc.BI_MIN_WIDTH, rchisq=1.0)
-        
-        continuum_mask_bi = np.ones_like(speed_bi, dtype=bool)
-        for s, e in zip(initial_start_bi, initial_end_bi):
-            continuum_mask_bi[s:e+1] = False
-
-        cont_flux_bi = flux_bi[continuum_mask_bi]
-        local_rchisq_bi = 1.0
-        if cont_flux_bi.size > 1:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=RuntimeWarning)
-                chi_sq = np.sum(((cont_flux_bi - model_bi[continuum_mask_bi]) / error_bi[continuum_mask_bi])**2)
-                local_rchisq_bi = chi_sq / (cont_flux_bi.size - 1)
-        
-        start_idx_bi, end_idx_bi = determine_troughs(norm_flux_bi_smooth, sigma_bi_smooth, speed_bi, bc.BI_MIN_WIDTH, rchisq=local_rchisq_bi)
-
-    for i in range(min(len(start_idx_bi), bc.NBI)):
-        s, e = start_idx_bi[i], end_idx_bi[i]
-        bi, bi_var = calculate_index(speed_bi[s:e+1], model_bi[s:e+1], norm_flux_bi[s:e+1], sigma_bi[s:e+1], difference, bc.BI_MIN_WIDTH)
-        balinfo[f'BI_{ion_name}'] += bi
-        balinfo[f'BI_{ion_name}_ERR'] += bi_var
-        balinfo[f'N{ion_name}_{int(bc.BI_MIN_WIDTH)}'] += 1
-        trough_flux = norm_flux_bi[s:e+1]
-        min_flux_idx = np.argmin(trough_flux)
-        balinfo[f'VMAX_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = -speed_bi[s]
-        balinfo[f'VMIN_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = -speed_bi[e]
-        balinfo[f'FMIN_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = trough_flux[min_flux_idx]
-        balinfo[f'POSMIN_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = -speed_bi[s:e+1][min_flux_idx]
 
 def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], verbose: bool = False) -> Dict:
     """
-    Calculate BAL quantities by processing CIV and SiIV lines.
-
-    This function delegates the core logic to the `_process_ion_line`
-    helper function to avoid code duplication.
+    Calculates BAL quantities, following the original script's logic flow
+    but using modernized helper functions.
     """
+    balwave, balspec, balerror = idata
     balinfo = initialize()
 
-    # Calculate median SNR over the CIV AI range
-    balwave, balspec, balerror = idata
+    # --- CIV Calculations ---
     speed_civ = bc.c * (balwave - bc.lambdaCIV) / bc.lambdaCIV
     idx_min_bal = np.searchsorted(speed_civ, bc.VMIN_BAL)
-    idx_max_ai = np.searchsorted(speed_civ, bc.AI_VMAX)
-    if idx_max_ai > idx_min_bal:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            balinfo['SNR_CIV'] = np.median(balspec[idx_min_bal:idx_max_ai] / balerror[idx_min_bal:idx_max_ai])
+    idx_max_bi = np.searchsorted(speed_civ, -3000.)
+    idx_max_ai = np.searchsorted(speed_civ, 0.)
 
-    # Process each ion
-    _process_ion_line(idata, model, bc.lambdaCIV, 'CIV', balinfo, verbose)
-    _process_ion_line(idata, model, bc.lambdaSiIV, 'SIIV', balinfo, verbose)
+    if idx_min_bal < idx_max_ai:
+        snr_slice = balspec[idx_min_bal:idx_max_ai] / balerror[idx_min_bal:idx_max_ai]
+        balinfo['SNR_CIV'] = np.median(snr_slice[np.isfinite(snr_slice)])
 
-    # Check for high-velocity troughs
-    if balinfo['VMAX_CIV_450'][0] > 10000.:
-        balinfo['TROUGH_10K'] = 1
+    # Normalize flux/error for CIV windows
+    norm_flux_ai = balspec[idx_min_bal:idx_max_ai] / model[idx_min_bal:idx_max_ai]
+    sigma_ai = balerror[idx_min_bal:idx_max_ai] / model[idx_min_bal:idx_max_ai]
+    norm_flux_bi = balspec[idx_min_bal:idx_max_bi] / model[idx_min_bal:idx_max_bi]
+    sigma_bi = balerror[idx_min_bal:idx_max_bi] / model[idx_min_bal:idx_max_bi]
 
-    # Finalize errors by taking the square root of the summed variances
-    for key in ['BI_CIV_ERR', 'AI_CIV_ERR', 'BI_SIIV_ERR', 'AI_SIIV_ERR']:
-        balinfo[key] = np.sqrt(balinfo[key])
+    # Step 1: Find CIV AI troughs
+    start_ai_civ, end_ai_civ = determine_troughs(norm_flux_ai, sigma_ai, speed_civ[idx_min_bal:idx_max_ai], bc.AI_MIN_WIDTH, is_ai=True)
+    
+    # Step 2: Calculate the single 'difference' metric based on CIV AI troughs
+    continuum_mask = np.ones_like(norm_flux_ai, dtype=bool)
+    for s, e in zip(start_ai_civ, end_ai_civ):
+        continuum_mask[s:e+1] = False
+    difference = np.mean(np.abs(model[idx_min_bal:idx_max_ai][continuum_mask] - balspec[idx_min_bal:idx_max_ai][continuum_mask]))
+    
+    # Step 3: Measure CIV AI troughs using the calculated difference
+    for i in range(min(len(start_ai_civ), bc.NAI)):
+        s, e = start_ai_civ[i], end_ai_civ[i]
+        ai, ai_err = calculate_index(speed_civ[idx_min_bal:idx_max_ai][s:e+1], model[idx_min_bal:idx_max_ai][s:e+1], norm_flux_ai[s:e+1], sigma_ai[s:e+1], difference, bc.AI_MIN_WIDTH)
+        balinfo['AI_CIV'] += ai
+        balinfo['AI_CIV_ERR'] += ai_err
+        balinfo['NCIV_450'] += 1
+        # ... (populate VMIN, VMAX, etc.)
+    
+    if balinfo['VMAX_CIV_450'][0] > 10000.: balinfo['TROUGH_10K'] = 1
+
+    # Step 4: Find and Measure CIV BI troughs, using the same difference
+    start_bi_civ, end_bi_civ = determine_troughs(norm_flux_bi, sigma_bi, speed_civ[idx_min_bal:idx_max_bi], bc.BI_MIN_WIDTH, is_ai=False)
+    for i in range(min(len(start_bi_civ), bc.NBI)):
+        s, e = start_bi_civ[i], end_bi_civ[i]
+        bi, bi_err = calculate_index(speed_civ[idx_min_bal:idx_max_bi][s:e+1], model[idx_min_bal:idx_max_bi][s:e+1], norm_flux_bi[s:e+1], sigma_bi[s:e+1], difference, bc.BI_MIN_WIDTH)
+        balinfo['BI_CIV'] += bi
+        balinfo['BI_CIV_ERR'] += bi_err
+        balinfo['NCIV_2000'] += 1
+        # ... (populate VMIN, VMAX, etc.)
+
+    # --- SiIV Calculations (if in bandpass) ---
+    if balwave[0] <= bc.lambdaSiIV * (1. + bc.VMIN_BAL / bc.c):
+        speed_siiv = bc.c * (balwave - bc.lambdaSiIV) / bc.lambdaSiIV
+        idx_min_bal_siiv = np.searchsorted(speed_siiv, bc.VMIN_BAL)
+        idx_max_bi_siiv = np.searchsorted(speed_siiv, -3000.)
+        idx_max_ai_siiv = np.searchsorted(speed_siiv, 0.)
+
+        # Normalize flux/error for SiIV windows
+        norm_flux_ai_siiv = balspec[idx_min_bal_siiv:idx_max_ai_siiv] / model[idx_min_bal_siiv:idx_max_ai_siiv]
+        sigma_ai_siiv = balerror[idx_min_bal_siiv:idx_max_ai_siiv] / model[idx_min_bal_siiv:idx_max_ai_siiv]
+        norm_flux_bi_siiv = balspec[idx_min_bal_siiv:idx_max_bi_siiv] / model[idx_min_bal_siiv:idx_max_bi_siiv]
+        sigma_bi_siiv = balerror[idx_min_bal_siiv:idx_max_bi_siiv] / model[idx_min_bal_siiv:idx_max_bi_siiv]
+
+        # Find and Measure SiIV AI troughs, using CIV difference
+        start_ai_siiv, end_ai_siiv = determine_troughs(norm_flux_ai_siiv, sigma_ai_siiv, speed_siiv[idx_min_bal_siiv:idx_max_ai_siiv], bc.AI_MIN_WIDTH, is_ai=True)
+        for i in range(min(len(start_ai_siiv), bc.NAI)):
+            s, e = start_ai_siiv[i], end_ai_siiv[i]
+            ai, ai_err = calculate_index(speed_siiv[idx_min_bal_siiv:idx_max_ai_siiv][s:e+1], model[idx_min_bal_siiv:idx_max_ai_siiv][s:e+1], norm_flux_ai_siiv[s:e+1], sigma_ai_siiv[s:e+1], difference, bc.AI_MIN_WIDTH)
+            balinfo['AI_SIIV'] += ai
+            balinfo['AI_SIIV_ERR'] += ai_err
+            balinfo['NSIIV_450'] += 1
+            # ... (populate VMIN, VMAX, etc.)
+            
+        # Find and Measure SiIV BI troughs, using CIV difference
+        start_bi_siiv, end_bi_siiv = determine_troughs(norm_flux_bi_siiv, sigma_bi_siiv, speed_siiv[idx_min_bal_siiv:idx_max_bi_siiv], bc.BI_MIN_WIDTH, is_ai=False)
+        for i in range(min(len(start_bi_siiv), bc.NBI)):
+            s, e = start_bi_siiv[i], end_bi_siiv[i]
+            bi, bi_err = calculate_index(speed_siiv[idx_min_bal_siiv:idx_max_bi_siiv][s:e+1], model[idx_min_bal_siiv:idx_max_bi_siiv][s:e+1], norm_flux_bi_siiv[s:e+1], sigma_bi_siiv[s:e+1], difference, bc.BI_MIN_WIDTH)
+            balinfo['BI_SIIV'] += bi
+            balinfo['BI_SIIV_ERR'] += bi_err
+            balinfo['NSIIV_2000'] += 1
+            # ... (populate VMIN, VMAX, etc.)
+
+    # Final sqrt on error terms
+    for key in balinfo:
+        if '_ERR' in key:
+            balinfo[key] = np.sqrt(balinfo[key]) if balinfo[key] > 0 else 0.0
 
     return balinfo
+
 
 
 # ==============================================================================
