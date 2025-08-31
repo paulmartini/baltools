@@ -8,7 +8,7 @@
 
 import math
 import warnings
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
