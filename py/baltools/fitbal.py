@@ -63,19 +63,18 @@ def initialize() -> Dict:
 # 2. CORE BALNICIY CALCULATION ROUTINES
 # ==============================================================================
 
-
 def determine_troughs(
     norm_flux: NDArray[np.float64],
     norm_sigma: NDArray[np.float64],
     speed: NDArray[np.float64],
     min_width: float,
-    rchisq: float,  # Add rchisq parameter
+    rchisq: float,
     is_ai: bool = False
 ) -> Tuple[List[int], List[int]]:
     """
     Identifies absorption troughs in a (typically smoothed) normalized spectrum.
     """
-    # Incorporate rchisq into the expression
+    start_indices, end_indices = [], []
     noise_penalty = bc.ERROR_SCALING_FACTOR * norm_sigma * rchisq
     expression = (1. - norm_flux / bc.CONTINUUM_THRESHOLD) - noise_penalty
 
@@ -98,7 +97,6 @@ def determine_troughs(
             if vel_range > min_width:
                 end_idx = i - 1
                 if is_ai:
-                    # Note: Significance test is still on the smoothed data
                     trough_flux = norm_flux[start_idx:end_idx + 1]
                     trough_sigma = norm_sigma[start_idx:end_idx + 1]
                     mean_flux = np.mean(trough_flux)
@@ -111,7 +109,6 @@ def determine_troughs(
                     end_indices.append(end_idx)
             in_trough = False
 
-    # Handle trough extending to the end of the array
     if in_trough and vel_range > min_width:
         start_indices.append(start_idx)
         end_indices.append(len(expression) - 1)
@@ -152,8 +149,6 @@ def calculate_index(
     return (value, variance) if value > 0. else (0., 0.)
 
 
-# In fitbal.py, replace the existing _process_ion_line function
-
 def _process_ion_line(
     idata: NDArray[np.float64],
     model: NDArray[np.float64],
@@ -175,7 +170,6 @@ def _process_ion_line(
             print(f"Skipping {ion_name}: Spectrum needs coverage to {min_wave_req:.1f}Å.")
         return
 
-    # Define velocity indices
     idx_min_bal = np.searchsorted(speed, bc.VMIN_BAL)
     idx_max_bi = np.searchsorted(speed, bc.BI_VMAX)
     idx_max_ai = np.searchsorted(speed, bc.AI_VMAX)
@@ -183,8 +177,8 @@ def _process_ion_line(
     # --- AI Calculation ---
     start_idx_ai, end_idx_ai = [], []
     difference = 0.0
+    norm_flux_ai, model_ai, speed_ai, sigma_ai = (np.array([]),)*4
 
-    # Ensure the slice is not empty
     if idx_min_bal < idx_max_ai:
         speed_ai = speed[idx_min_bal:idx_max_ai]
         flux_ai = balspec[idx_min_bal:idx_max_ai]
@@ -199,40 +193,33 @@ def _process_ion_line(
         norm_flux_ai_smooth = uniform_filter1d(norm_flux_ai, size=bc.SMOOTHING_WIDTH)
         sigma_ai_smooth = uniform_filter1d(sigma_ai, size=bc.SMOOTHING_WIDTH)
 
-        # First Pass (AI): Identify troughs to define continuum
-        initial_start, _ = determine_troughs(norm_flux_ai_smooth, sigma_ai_smooth, speed_ai, bc.AI_MIN_WIDTH, rchisq=1.0, is_ai=True)
+        initial_start, initial_end = determine_troughs(norm_flux_ai_smooth, sigma_ai_smooth, speed_ai, bc.AI_MIN_WIDTH, rchisq=1.0, is_ai=True)
 
         continuum_mask = np.ones_like(speed_ai, dtype=bool)
-        for s, e in zip(initial_start, _):
+        for s, e in zip(initial_start, initial_end):
             continuum_mask[s:e+1] = False
 
         cont_flux = flux_ai[continuum_mask]
-        
         local_rchisq_ai = 1.0
         if cont_flux.size > 1:
-            cont_model = model_ai[continuum_mask]
-            cont_error = error_ai[continuum_mask]
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
-                chi_sq = np.sum(((cont_flux - cont_model) / cont_error)**2)
+                chi_sq = np.sum(((cont_flux - model_ai[continuum_mask]) / error_ai[continuum_mask])**2)
                 local_rchisq_ai = chi_sq / (cont_flux.size - 1)
         
-        # Final Pass (AI): Use local_rchisq as penalty
         start_idx_ai, end_idx_ai = determine_troughs(norm_flux_ai_smooth, sigma_ai_smooth, speed_ai, bc.AI_MIN_WIDTH, rchisq=local_rchisq_ai, is_ai=True)
         
-        # Calculate difference metric used for both AI and BI error
         masked_model_ai = model_ai[continuum_mask]
         if masked_model_ai.size > 0:
             difference = np.mean(np.abs(masked_model_ai - flux_ai[continuum_mask]))
     
-    # AI Measurement Loop
     for i in range(min(len(start_idx_ai), bc.NAI)):
         s, e = start_idx_ai[i], end_idx_ai[i]
         ai, ai_var = calculate_index(speed_ai[s:e+1], model_ai[s:e+1], norm_flux_ai[s:e+1], sigma_ai[s:e+1], difference, bc.AI_MIN_WIDTH)
         balinfo[f'AI_{ion_name}'] += ai
         balinfo[f'AI_{ion_name}_ERR'] += ai_var
         balinfo[f'N{ion_name}_{int(bc.AI_MIN_WIDTH)}'] += 1
-        trough_flux = norm_flux_ai[s:e+1] # Use original flux for FMIN
+        trough_flux = norm_flux_ai[s:e+1]
         min_flux_idx = np.argmin(trough_flux)
         balinfo[f'VMAX_{ion_name}_{int(bc.AI_MIN_WIDTH)}'][i] = -speed_ai[s]
         balinfo[f'VMIN_{ion_name}_{int(bc.AI_MIN_WIDTH)}'][i] = -speed_ai[e]
@@ -241,8 +228,8 @@ def _process_ion_line(
 
     # --- BI Calculation ---
     start_idx_bi, end_idx_bi = [], []
+    norm_flux_bi, model_bi, speed_bi, sigma_bi = (np.array([]),)*4
     
-    # Ensure the slice is not empty
     if idx_min_bal < idx_max_bi:
         speed_bi = speed[idx_min_bal:idx_max_bi]
         flux_bi = balspec[idx_min_bal:idx_max_bi]
@@ -257,7 +244,6 @@ def _process_ion_line(
         norm_flux_bi_smooth = uniform_filter1d(norm_flux_bi, size=bc.SMOOTHING_WIDTH)
         sigma_bi_smooth = uniform_filter1d(sigma_bi, size=bc.SMOOTHING_WIDTH)
 
-        # First Pass (BI):
         initial_start_bi, initial_end_bi = determine_troughs(norm_flux_bi_smooth, sigma_bi_smooth, speed_bi, bc.BI_MIN_WIDTH, rchisq=1.0)
         
         continuum_mask_bi = np.ones_like(speed_bi, dtype=bool)
@@ -265,33 +251,27 @@ def _process_ion_line(
             continuum_mask_bi[s:e+1] = False
 
         cont_flux_bi = flux_bi[continuum_mask_bi]
-        
         local_rchisq_bi = 1.0
         if cont_flux_bi.size > 1:
-            cont_model_bi = model_bi[continuum_mask_bi]
-            cont_error_bi = error_bi[continuum_mask_bi]
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
-                chi_sq = np.sum(((cont_flux_bi - cont_model_bi) / cont_error_bi)**2)
+                chi_sq = np.sum(((cont_flux_bi - model_bi[continuum_mask_bi]) / error_bi[continuum_mask_bi])**2)
                 local_rchisq_bi = chi_sq / (cont_flux_bi.size - 1)
         
-        # Final Pass (BI):
         start_idx_bi, end_idx_bi = determine_troughs(norm_flux_bi_smooth, sigma_bi_smooth, speed_bi, bc.BI_MIN_WIDTH, rchisq=local_rchisq_bi)
 
-    # BI Measurement Loop
     for i in range(min(len(start_idx_bi), bc.NBI)):
         s, e = start_idx_bi[i], end_idx_bi[i]
         bi, bi_var = calculate_index(speed_bi[s:e+1], model_bi[s:e+1], norm_flux_bi[s:e+1], sigma_bi[s:e+1], difference, bc.BI_MIN_WIDTH)
         balinfo[f'BI_{ion_name}'] += bi
         balinfo[f'BI_{ion_name}_ERR'] += bi_var
         balinfo[f'N{ion_name}_{int(bc.BI_MIN_WIDTH)}'] += 1
-        trough_flux = norm_flux_bi[s:e+1] # Use original flux for FMIN
+        trough_flux = norm_flux_bi[s:e+1]
         min_flux_idx = np.argmin(trough_flux)
         balinfo[f'VMAX_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = -speed_bi[s]
         balinfo[f'VMIN_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = -speed_bi[e]
         balinfo[f'FMIN_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = trough_flux[min_flux_idx]
         balinfo[f'POSMIN_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = -speed_bi[s:e+1][min_flux_idx]
-
 
 def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], verbose: bool = False) -> Dict:
     """
