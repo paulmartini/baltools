@@ -155,10 +155,14 @@ def calculate_index(
 
     value = np.sum(integrand[1:][integration_mask] * dv[integration_mask])
 
-    # Replicate original error propagation (sum of variance * dv)
-    sigma_tt_sq = sigma[:-1]**2 + (diff / pca_model[:-1])**2
-    variance_term = (sigma_tt_sq / bc.CONTINUUM_THRESHOLD**2) * dv
-    val_error = np.sum(variance_term[integration_mask])
+    # Suppress expected overflow warnings from squaring infinite sigma values
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        
+        # Replicate original error propagation (sum of variance * dv)
+        sigma_tt_sq = sigma[:-1]**2 + (diff / pca_model[:-1])**2
+        variance_term = (sigma_tt_sq / bc.CONTINUUM_THRESHOLD**2) * dv
+        val_error = np.sum(variance_term[integration_mask])
     
     return (value, val_error) if value > 0. else (0., 0.)
 
