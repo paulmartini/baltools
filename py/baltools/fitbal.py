@@ -71,17 +71,7 @@ def determine_troughs(
     is_ai: bool = False
 ) -> Tuple[List[int], List[int]]:
     """
-    Identifies absorption troughs in a normalized QSO spectrum.
-
-    Args:
-        norm_flux: Normalized flux array.
-        norm_sigma: Normalized error array.
-        speed: Velocity array corresponding to the flux.
-        min_width: The minimum width (km/s) for a trough to be valid.
-        is_ai: If True, applies an additional significance test for AI troughs.
-
-    Returns:
-        A tuple of (start_indices, end_indices) for each valid trough.
+    Identifies absorption troughs, with logic to allow a single-pixel gap to be bridged.
     """
     start_indices, end_indices = [], []
     expression = (1. - norm_flux / bc.CONTINUUM_THRESHOLD) - bc.ERROR_SCALING_FACTOR * norm_sigma
@@ -90,43 +80,48 @@ def determine_troughs(
         return [], []
 
     vel_range = 0.0
+    start_idx = 0
     in_trough = False
-    for i in range(len(expression)):
+    i = 0
+    while i < len(expression):
         if expression[i] > 0:
             if not in_trough:
                 start_idx = i
                 in_trough = True
                 vel_range = 0.0001
+            elif i > 0:
+                vel_range += speed[i] - speed[i - 1]
+            i += 1
+        else: # Not in absorption
+            # Check for a single-pixel bridge
+            is_bridged = (in_trough and i + 1 < len(expression) and expression[i+1] > 0)
+            if is_bridged:
+                vel_range += speed[i+1] - speed[i-1] # Bridge the gap
+                i += 2 # Skip the current pixel and the next absorbed one
             else:
-                if i > 0:
-                    vel_range += speed[i] - speed[i - 1]
-        else:
-            if in_trough:
-                # End of a potential trough
-                if vel_range > min_width:
+                # End of trough, check width
+                if in_trough and vel_range > min_width:
                     end_idx = i - 1
                     if is_ai:
-                        # Apply significance test for AI troughs
                         trough_flux = norm_flux[start_idx:end_idx + 1]
                         trough_sigma = norm_sigma[start_idx:end_idx + 1]
                         mean_flux = np.mean(trough_flux)
-                        # Error on the mean
                         mean_sigma = np.mean(trough_sigma) / np.sqrt(len(trough_flux))
-                        # Test if the mean flux + 3-sigma is still below the continuum
                         if (1. - (mean_flux + 3.0 * mean_sigma) / bc.CONTINUUM_THRESHOLD) > 0:
                             start_indices.append(start_idx)
                             end_indices.append(end_idx)
-                    else: # BI troughs do not require the extra test
+                    else:
                         start_indices.append(start_idx)
                         end_indices.append(end_idx)
-            in_trough = False
-            vel_range = 0.0
-
+                in_trough = False
+                vel_range = 0.0
+                i += 1
+    
     # Handle trough extending to the end of the array
     if in_trough and vel_range > min_width:
         end_indices.append(len(expression) - 1)
         start_indices.append(start_idx)
-
+        
     return start_indices, end_indices
 
 
@@ -135,30 +130,31 @@ def calculate_index(
     pca_model: NDArray[np.float64],
     norm_flux: NDArray[np.float64],
     sigma: NDArray[np.float64],
-    diff: float
+    diff: float,
+    min_width_for_sum: float
 ) -> Tuple[float, float]:
     """
-    Calculates a BALnicity or Absorption Index and its associated uncertainty.
-    This is a vectorized implementation for performance.
-
-    Returns:
-        A tuple of (index_value, index_variance). The sqrt of variance should
-        be taken after summing contributions from all troughs.
+    Calculates BALnicity/Absorption Index, replicating the original logic
+    of only summing after a minimum velocity width is reached.
     """
     if len(speed) < 2:
         return 0., 0.
 
     dv = np.diff(speed)
     integrand = 1. - (norm_flux[1:] / bc.CONTINUUM_THRESHOLD)
+    
+    # Replicate original logic: only integrate after v_range > min_width_for_sum
+    v_range = np.cumsum(np.insert(dv, 0, 0))
+    integration_mask = v_range[1:] >= min_width_for_sum
 
-    # Calculate the index value (the integral)
-    value = np.sum(integrand * dv)
+    # Apply mask to the integrand and differential velocity
+    value = np.sum(integrand[integration_mask] * dv[integration_mask])
 
-    # Correctly propagate the error (sum of weighted variances)
-    # sigma_tt_sq is the variance of the normalized flux at each point
-    sigma_tt_sq = sigma[1:]**2 + (diff / pca_model[1:])**2
-    variance = np.sum((sigma_tt_sq / bc.CONTINUUM_THRESHOLD**2) * (dv**2))
-
+    # Propagate error for the masked region
+    sigma_sq_masked = sigma[1:][integration_mask]**2 + (diff / pca_model[1:][integration_mask])**2
+    dv_sq_masked = dv[integration_mask]**2
+    variance = np.sum((sigma_sq_masked / bc.CONTINUUM_THRESHOLD**2) * dv_sq_masked)
+    
     return (value, variance) if value > 0. else (0., 0.)
 
 
@@ -217,7 +213,7 @@ def _process_ion_line(
 
     for i in range(min(len(start_idx), bc.NAI)):
         s, e = start_idx[i], end_idx[i]
-        ai, ai_var = calculate_index(speed_ai[s:e+1], model_ai[s:e+1], norm_flux_ai[s:e+1], sigma_ai[s:e+1], difference)
+        ai, ai_var = calculate_index(speed_ai[s:e+1], model_ai[s:e+1], norm_flux_ai[s:e+1], sigma_ai[s:e+1], difference, bc.AI_MIN_WIDTH)
 
         balinfo[f'AI_{ion_name}'] += ai
         balinfo[f'AI_{ion_name}_ERR'] += ai_var
@@ -246,7 +242,7 @@ def _process_ion_line(
 
     for i in range(min(len(start_idx), bc.NBI)):
         s, e = start_idx[i], end_idx[i]
-        bi, bi_var = calculate_index(speed_bi[s:e+1], model_bi[s:e+1], norm_flux_bi[s:e+1], sigma_bi[s:e+1], difference)
+        bi, bi_var = calculate_index(speed_bi[s:e+1], model_bi[s:e+1], norm_flux_bi[s:e+1], sigma_bi[s:e+1], difference, bc.BI_MIN_WIDTH)
 
         balinfo[f'BI_{ion_name}'] += bi
         balinfo[f'BI_{ion_name}_ERR'] += bi_var
