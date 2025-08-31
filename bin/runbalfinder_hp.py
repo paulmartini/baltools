@@ -1,14 +1,17 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+"""
+Generate BAL catalogs from DESI healpix data for a specific data release.
 
-'''
-Generate BAL catalogs from DESI healpix data for a specific data release. One 
-catalog is generated per healpix. The catalogs are put in a directory 
-structure that matches the structure of the data release. 
-Use the separate script buildbalcat.py to create a BAL catalog for a 
-corresponding QSO catalog. 
+This module processes DESI spectra data organized by healpix to identify and catalog
+Broad Absorption Line (BAL) features in quasar spectra. One catalog is generated per
+healpix, organized in a directory structure that matches the data release structure.
 
-OPTIMIZED VERSION for NERSC systems with high core counts
-'''
+The module is optimized for NERSC systems with high core counts and includes
+parallel processing capabilities for efficient handling of large datasets.
+
+Author: DESI Collaboration, Optimized version for NERSC systems
+License: DESI Collaboration License
+"""
 
 import os
 import sys
@@ -17,13 +20,15 @@ import matplotlib.pyplot as plt
 from astropy.io import fits
 from glob import glob
 import fitsio
-
+from pathlib import Path
+from typing import List, Tuple, Optional, Dict, Any, Union
 from time import gmtime, strftime
 import argparse
 from collections import defaultdict
 import desispec.io
 from desispec.coaddition import coadd_cameras
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from multiprocessing import Pool
 
 import baltools
 from baltools import balconfig as bc
@@ -31,88 +36,64 @@ from baltools import plotter, fitbal, baltable
 from baltools import desibal as db
 from baltools import utils
 
-from multiprocessing import Pool
-
+# Set DESI environment
 os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
 
+
 class FileCache:
-    """Cache for file existence checks to reduce I/O overhead"""
-    def __init__(self):
-        self._cache = {}
+    """
+    Cache for file existence checks to reduce I/O overhead.
     
-    def exists(self, filepath):
+    This class provides a simple caching mechanism for file existence checks,
+    which can significantly reduce I/O overhead when the same files are checked
+    multiple times during processing.
+    """
+    
+    def __init__(self) -> None:
+        """Initialize an empty file cache."""
+        self._cache: Dict[str, bool] = {}
+    
+    def exists(self, filepath: str) -> bool:
+        """
+        Check if a file exists, using cache if available.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to the file to check
+            
+        Returns
+        -------
+        bool
+            True if file exists, False otherwise
+        """
         if filepath not in self._cache:
             self._cache[filepath] = os.path.isfile(filepath)
         return self._cache[filepath]
     
-    def clear(self):
+    def clear(self) -> None:
+        """Clear the file cache."""
         self._cache.clear()
 
-def parse(options=None): 
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description="""Run balfinder on DESI data""")
 
-    parser.add_argument('-hp','--healpix', nargs='*', default = None, required=False,
-                    help='List of healpix number(s) to process - default is all')
-
-    parser.add_argument('-r', '--release', type = str, default = 'everest', required = False,
-                    help = 'Data release subdirectory, default is everest')
-
-    parser.add_argument('-a','--altzdir', type=str, default = None, required=True,
-                    help='Path to directory structure with healpix-based afterburner redshift catalogs')
-
-    parser.add_argument('-z','--zfileroot', type=str, default='zafter', required=False, 
-                    help='Root name of healpix-based afterburner redshift catalogs')
-
-    parser.add_argument('-s', '--survey', type = str, default = 'main', required = False,
-                    help = 'Survey subdirectory [sv1, sv2, sv3, main], default is main')
-
-    parser.add_argument('-m', '--moon', type = str, default = 'dark', required = False,
-                    help = 'Moon brightness [bright, dark], default is dark')
-
-    parser.add_argument('--mock', default=False, required = False, action='store_true',
-                    help = 'Mock catalog?, default is False')
-
-    parser.add_argument('--mockdir', type=str, default = None, required=False,
-                    help='Path to directory structure with mock data (not including spectra-16/)') 
-
-    parser.add_argument('-o','--outdir', type = str, default = None, required = False,
-                    help = 'Deprecated -- now ignored')
-
-    parser.add_argument('-l','--logfile', type = str, default = 'logfile.txt', required = False,
-                    help = 'Name of log file written to altzdir, default is logfile.txt')
-
-    parser.add_argument('--nproc', type=int, default=64, required=False,
-                        help='Number of processes')
-
-    parser.add_argument('-c','--clobber', default=False, required=False, action='store_true',
-                    help='Clobber (overwrite) BAL catalog if it already exists?')
-
-    parser.add_argument('-v','--verbose', default=False, required=False, action='store_true',
-                    help = 'Provide verbose output?')
-
-    parser.add_argument('-t','--alttemp', default=False, required=False, action='store_true',
-                    help = 'Use alternate components made by Allyson Brodzeller')
-
-    parser.add_argument('--tids', default=False, required=False, action='store_true',
-                    help = 'Read only QSO TARGETIDs') 
-
-    parser.add_argument('--chunk-size', type=int, default=50, required=False,
-                        help='Chunk size for parallel processing (default: 50)')
-
-    parser.add_argument('--file-discovery-workers', type=int, default=8, required=False,
-                        help='Number of workers for parallel file discovery (default: 8)')
-
-    if options is None: 
-        args  = parser.parse_args()
-    else: 
-        args  = parser.parse_args(options)
-
-    return args 
-
-def discover_healpix_parallel(dataroot, n_workers=8):
-    """Discover healpix directories in parallel"""
-    def scan_directory(subdir):
+def discover_healpix_parallel(dataroot: str, n_workers: int = 8) -> List[str]:
+    """
+    Discover healpix directories in parallel.
+    
+    Parameters
+    ----------
+    dataroot : str
+        Root directory containing healpix subdirectories
+    n_workers : int, optional
+        Number of worker threads for parallel discovery, by default 8
+        
+    Returns
+    -------
+    List[str]
+        List of healpix directory names found
+    """
+    def scan_directory(subdir: str) -> List[str]:
+        """Scan a single directory for healpix subdirectories."""
         healpix_dirs = []
         if os.path.isdir(subdir):
             for item in os.listdir(subdir):
@@ -148,8 +129,26 @@ def discover_healpix_parallel(dataroot, n_workers=8):
     
     return healpixels
 
-def process_healpix_chunk(healpix_chunk, args, file_cache=None):
-    """Process a chunk of healpix pixels"""
+
+def process_healpix_chunk(healpix_chunk: List[str], args: argparse.Namespace, 
+                         file_cache: Optional[FileCache] = None) -> List[Tuple[str, Optional[str]]]:
+    """
+    Process a chunk of healpix pixels.
+    
+    Parameters
+    ----------
+    healpix_chunk : List[str]
+        List of healpix indices to process
+    args : argparse.Namespace
+        Command line arguments
+    file_cache : Optional[FileCache], optional
+        File cache for existence checks, by default None
+        
+    Returns
+    -------
+    List[Tuple[str, Optional[str]]]
+        List of (healpix, error_type) tuples
+    """
     if file_cache is None:
         file_cache = FileCache()
     
@@ -160,8 +159,26 @@ def process_healpix_chunk(healpix_chunk, args, file_cache=None):
     
     return results
 
-def findbals_one_healpix_optimized(healpix, args, file_cache=None):
-    """Optimized version of findbals_one_healpix with caching and early exits"""
+
+def findbals_one_healpix_optimized(healpix: str, args: argparse.Namespace, 
+                                  file_cache: Optional[FileCache] = None) -> Tuple[str, Optional[str]]:
+    """
+    Optimized version of findbals_one_healpix with caching and early exits.
+    
+    Parameters
+    ----------
+    healpix : str
+        Healpix index to process
+    args : argparse.Namespace
+        Command line arguments
+    file_cache : Optional[FileCache], optional
+        File cache for existence checks, by default None
+        
+    Returns
+    -------
+    Tuple[str, Optional[str]]
+        Tuple of (healpix, error_type) where error_type is None if successful
+    """
     if file_cache is None:
         file_cache = FileCache()
     
@@ -227,10 +244,141 @@ def findbals_one_healpix_optimized(healpix, args, file_cache=None):
 
     return healpix, errortype
 
-def main(args=None): 
 
+def parse_arguments(options: Optional[List[str]] = None) -> argparse.Namespace:
+    """
+    Parse command line arguments.
+    
+    Parameters
+    ----------
+    options : Optional[List[str]], optional
+        List of command line options to parse, by default None
+        
+    Returns
+    -------
+    argparse.Namespace
+        Parsed command line arguments
+    """
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Run balfinder on DESI data"
+    )
+
+    parser.add_argument('-hp', '--healpix', nargs='*', default=None, required=False,
+                        help='List of healpix number(s) to process - default is all')
+
+    parser.add_argument('-r', '--release', type=str, default='everest', required=False,
+                        help='Data release subdirectory, default is everest')
+
+    parser.add_argument('-a', '--altzdir', type=str, default=None, required=True,
+                        help='Path to directory structure with healpix-based afterburner redshift catalogs')
+
+    parser.add_argument('-z', '--zfileroot', type=str, default='zafter', required=False, 
+                        help='Root name of healpix-based afterburner redshift catalogs')
+
+    parser.add_argument('-s', '--survey', type=str, default='main', required=False,
+                        help='Survey subdirectory [sv1, sv2, sv3, main], default is main')
+
+    parser.add_argument('-m', '--moon', type=str, default='dark', required=False,
+                        help='Moon brightness [bright, dark], default is dark')
+
+    parser.add_argument('--mock', default=False, required=False, action='store_true',
+                        help='Mock catalog?, default is False')
+
+    parser.add_argument('--mockdir', type=str, default=None, required=False,
+                        help='Path to directory structure with mock data (not including spectra-16/)') 
+
+    parser.add_argument('-o', '--outdir', type=str, default=None, required=False,
+                        help='Deprecated -- now ignored')
+
+    parser.add_argument('-l', '--logfile', type=str, default='logfile.txt', required=False,
+                        help='Name of log file written to altzdir, default is logfile.txt')
+
+    parser.add_argument('--nproc', type=int, default=64, required=False,
+                        help='Number of processes')
+
+    parser.add_argument('-c', '--clobber', default=False, required=False, action='store_true',
+                        help='Clobber (overwrite) BAL catalog if it already exists?')
+
+    parser.add_argument('-v', '--verbose', default=False, required=False, action='store_true',
+                        help='Provide verbose output?')
+
+    parser.add_argument('-t', '--alttemp', default=False, required=False, action='store_true',
+                        help='Use alternate components made by Allyson Brodzeller')
+
+    parser.add_argument('--tids', default=False, required=False, action='store_true',
+                        help='Read only QSO TARGETIDs') 
+
+    parser.add_argument('--chunk-size', type=int, default=50, required=False,
+                        help='Chunk size for parallel processing (default: 50)')
+
+    parser.add_argument('--file-discovery-workers', type=int, default=8, required=False,
+                        help='Number of workers for parallel file discovery (default: 8)')
+
+    if options is None: 
+        args = parser.parse_args()
+    else: 
+        args = parser.parse_args(options)
+
+    return args
+
+
+def setup_logging(args: argparse.Namespace, outroot: str) -> Path:
+    """
+    Setup logging file and write header.
+    
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Command line arguments
+    outroot : str
+        Output root directory
+        
+    Returns
+    -------
+    Path
+        Path to the log file
+    """
+    outlog = Path(outroot) / args.logfile
+    
+    # Write log header
+    try: 
+        lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getlogin()}\n"
+    except OSError: 
+        try: 
+            lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('USER')}\n"
+        except (TypeError, KeyError): 
+            try: 
+                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('LOGNAME')}\n"
+            except (TypeError, KeyError): 
+                print("Error with tagging log file") 
+                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT\n"
+    
+    with open(outlog, 'a') as f:
+        f.write(lastupdate)
+        f.write(" ".join(sys.argv) + '\n')
+    
+    return outlog
+
+
+def main(args: Optional[Union[argparse.Namespace, List[str], Tuple[str, ...]]] = None) -> None:
+    """
+    Main function to run BAL finder on DESI data.
+    
+    This function:
+    1. Discovers available healpix directories
+    2. Validates requested healpix against available data
+    3. Creates output directory structure
+    4. Processes healpix in parallel batches
+    5. Logs results and errors
+    
+    Parameters
+    ----------
+    args : Optional[Union[argparse.Namespace, List[str], Tuple[str, ...]]], optional
+        Command line arguments, by default None
+    """
     if isinstance(args, (list, tuple, type(None))):
-        args = parse(args)
+        args = parse_arguments(args)
 
     # Root directory for input data: 
     if args.mock: 
@@ -287,24 +435,7 @@ def main(args=None):
     issuehealpixels = []
     errortypes = []
     
-    outlog = os.path.join(outroot, args.logfile)
-    
-    # Write log header
-    try: 
-        lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getlogin()}\n"
-    except: 
-        try: 
-            lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('USER')}\n"
-        except: 
-            try: 
-                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('LOGNAME')}\n"
-            except: 
-                print("Error with tagging log file") 
-                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT\n"
-    
-    with open(outlog, 'a') as f:
-        f.write(lastupdate)
-        f.write(" ".join(sys.argv) + '\n')
+    outlog = setup_logging(args, outroot)
 
     # Add dataroot and outroot to args for use in worker functions
     args.dataroot = dataroot
@@ -365,18 +496,54 @@ def main(args=None):
         print(f"Wrote output log {outlog}")
         print(f"Processed {len(all_results)} healpix, {len(issuehealpixels)} had errors")
 
-def _func(arg): 
-    """ Used for multiprocessing.Pool - kept for backward compatibility """
+
+def _func(arg: Dict[str, Any]) -> Tuple[str, Optional[str]]:
+    """
+    Used for multiprocessing.Pool - kept for backward compatibility.
+    
+    Parameters
+    ----------
+    arg : Dict[str, Any]
+        Dictionary containing function arguments
+        
+    Returns
+    -------
+    Tuple[str, Optional[str]]
+        Result from findbals_one_healpix_optimized
+    """
     return findbals_one_healpix_optimized(**arg)
 
-def findbals_one_healpix(healpix, args, healpixels, dataroot, outroot): 
-    """Original function kept for backward compatibility"""
+
+def findbals_one_healpix(healpix: str, args: argparse.Namespace, healpixels: List[str], 
+                        dataroot: str, outroot: str) -> Tuple[str, Optional[str]]:
+    """
+    Original function kept for backward compatibility.
+    
+    Parameters
+    ----------
+    healpix : str
+        Healpix index to process
+    args : argparse.Namespace
+        Command line arguments
+    healpixels : List[str]
+        List of available healpix
+    dataroot : str
+        Data root directory
+    outroot : str
+        Output root directory
+        
+    Returns
+    -------
+    Tuple[str, Optional[str]]
+        Result from findbals_one_healpix_optimized
+    """
     # Create a temporary args object with dataroot and outroot
     temp_args = argparse.Namespace(**vars(args))
     temp_args.dataroot = dataroot
     temp_args.outroot = outroot
     
     return findbals_one_healpix_optimized(healpix, temp_args)
+
 
 if __name__ == "__main__":
     main()

@@ -1,14 +1,13 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
+Split an afterburner redshift catalog into separate, healpix-based redshift catalogs.
 
-baltools.splitafterburner_hp
-=========================
+This module splits a large QSO catalog into individual healpix-based redshift catalogs
+to enable parallel processing of BAL finding on individual healpix files. It's optimized
+for NERSC systems with high core counts.
 
-Split an afterburner redshift catalog into separate, healpix-based redshift catalogs in order 
-to run the balfilder on individual healpix files
-
-OPTIMIZED VERSION for NERSC systems with high core counts
-
+Author: Simon Filbert (2021), Optimized version for NERSC systems
+License: DESI Collaboration License
 """
 
 import os
@@ -21,57 +20,59 @@ from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import argparse
 from time import gmtime, strftime
+from typing import List, Tuple, Optional, Dict, Any
+from pathlib import Path
 
 from baltools import balconfig as bc
 from baltools import popqsotab as pt
 from baltools import utils
 
+# Set DESI environment
 os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description="""Split an afterburner into redshift catalogs organized by healpix""")
 
-parser.add_argument('-q', '--qsocat', type = str, default = None, required = True,
-                    help = 'Input QSO catalog')
-
-parser.add_argument('-a','--altzdir', type=str, default = None, required=True,
-                    help='Path to directory structure with healpix-based afterburner redshift catalogs')
-
-parser.add_argument('-z','--zfileroot', type=str, default="zafter", 
-                    required=False, help='Root name of healpix-based afterburner redshift catalogs')
-
-parser.add_argument('-s', '--survey', type = str, default = 'main', required = False,
-                    help = 'Survey subdirectory [sv1, sv2, sv3, main], default is main')
-
-parser.add_argument('-m', '--moon', type = str, default = 'dark', required = False,
-                    help = 'Moon brightness [bright, dark], default is dark')
-
-parser.add_argument('--mock', default=False, required = False, action='store_true',
-                    help = 'Mock catalog?, default is False')
-
-parser.add_argument('-l','--logfile', type = str, default = 'logfile-{survey}-{moon}.txt', required = False,
-                    help = 'Name of log file written to outdir, default is logfile-{survey}-{moon}.txt')
-
-parser.add_argument('-c','--clobber', default=False, required=False, action='store_true', 
-                    help='Clobber (overwrite) BAL catalog if it already exists?')
-
-parser.add_argument('-v','--verbose', default=False, required=False, action='store_true', 
-                    help = 'Provide verbose output?')
-
-parser.add_argument('--nproc', type=int, default=64, required=False,
-                    help='Number of processes for parallel processing (default: 64)')
-
-parser.add_argument('--chunk-size', type=int, default=1000, required=False,
-                    help='Chunk size for memory-efficient processing (default: 1000)')
-
-args  = parser.parse_args()
-
-def calculate_healpix_vectorized(ra, dec, nside=64):
-    """Calculate healpix for all coordinates at once using vectorized operations"""
+def calculate_healpix_vectorized(ra: np.ndarray, dec: np.ndarray, nside: int = 64) -> np.ndarray:
+    """
+    Calculate healpix indices for all coordinates using vectorized operations.
+    
+    Parameters
+    ----------
+    ra : np.ndarray
+        Right ascension coordinates in degrees
+    dec : np.ndarray
+        Declination coordinates in degrees
+    nside : int, optional
+        HEALPix nside parameter, by default 64
+        
+    Returns
+    -------
+    np.ndarray
+        Array of healpix indices for each coordinate pair
+    """
     return hp.ang2pix(nside, ra, dec, lonlat=True, nest=True)
 
-def create_healpix_data(qcat, healpixels, hmask, args):
-    """Create healpix data structure for a single healpix"""
+
+def create_healpix_data(qcat: np.ndarray, healpixels: np.ndarray, hmask: np.ndarray, 
+                       args: argparse.Namespace) -> np.ndarray:
+    """
+    Create healpix data structure for a single healpix.
+    
+    Parameters
+    ----------
+    qcat : np.ndarray
+        QSO catalog data
+    healpixels : np.ndarray
+        Array of healpix indices for all QSOs
+    hmask : np.ndarray
+        Boolean mask for QSOs in the current healpix
+    args : argparse.Namespace
+        Command line arguments
+        
+    Returns
+    -------
+    np.ndarray
+        Structured array containing QSO data for the healpix
+    """
     nqsos = np.sum(hmask)
     spectypes = np.full(nqsos, 'QSO', dtype='<U3')
     
@@ -103,36 +104,73 @@ def create_healpix_data(qcat, healpixels, hmask, args):
     
     return data
 
-def write_healpix_file(healpix, data, args):
-    """Write a single healpix file using fitsio for better performance"""
+
+def write_healpix_file(healpix: int, data: np.ndarray, args: argparse.Namespace) -> Tuple[int, int]:
+    """
+    Write a single healpix file using fitsio for better performance.
+    
+    Parameters
+    ----------
+    healpix : int
+        Healpix index
+    data : np.ndarray
+        QSO data for this healpix
+    args : argparse.Namespace
+        Command line arguments
+        
+    Returns
+    -------
+    Tuple[int, int]
+        Tuple of (healpix, number_of_qsos)
+    """
     hpdir = utils.gethpdir(str(healpix))
     
     if args.mock:
         zfilename = f"{args.zfileroot}-16-{healpix}.fits"
-        zdir = os.path.join(args.altzdir, "spectra-16", hpdir, str(healpix))
+        zdir = Path(args.altzdir) / "spectra-16" / hpdir / str(healpix)
     else:
         zfilename = f"{args.zfileroot}-{args.survey}-{args.moon}-{healpix}.fits"
-        zdir = os.path.join(args.altzdir, "healpix", args.survey, args.moon, hpdir, str(healpix))
+        zdir = Path(args.altzdir) / "healpix" / args.survey / args.moon / hpdir / str(healpix)
     
-    utils.pmmkdir(zdir)
-    zfile = os.path.join(zdir, zfilename)
+    zdir.mkdir(parents=True, exist_ok=True)
+    zfile = zdir / zfilename
     
     # Check if file exists and clobber setting
-    if os.path.isfile(zfile) and not args.clobber:
+    if zfile.exists() and not args.clobber:
         if args.verbose:
             print(f"Warning: {zfile} exists and clobber = False, skipping")
         return healpix, 0
     
     # Write using fitsio for better performance
-    fitsio.write(zfile, data, extname='REDSHIFTS', clobber=args.clobber)
+    fitsio.write(str(zfile), data, extname='REDSHIFTS', clobber=args.clobber)
     
     if args.verbose:
         print(f"Wrote output file {zfile} with {len(data)} QSOs")
     
     return healpix, len(data)
 
-def process_healpix_batch(healpix_batch, qcat, healpixels, args):
-    """Process a batch of healpix pixels"""
+
+def process_healpix_batch(healpix_batch: List[int], qcat: np.ndarray, 
+                         healpixels: np.ndarray, args: argparse.Namespace) -> List[Tuple[int, int]]:
+    """
+    Process a batch of healpix pixels.
+    
+    Parameters
+    ----------
+    healpix_batch : List[int]
+        List of healpix indices to process
+    qcat : np.ndarray
+        QSO catalog data
+    healpixels : np.ndarray
+        Array of healpix indices for all QSOs
+    args : argparse.Namespace
+        Command line arguments
+        
+    Returns
+    -------
+    List[Tuple[int, int]]
+        List of (healpix, nqsos) tuples
+    """
     results = []
     for healpix in healpix_batch:
         hmask = healpixels == healpix
@@ -142,17 +180,124 @@ def process_healpix_batch(healpix_batch, qcat, healpixels, args):
             results.append((healpix_result, nqsos))
     return results
 
-def main():
+
+def setup_logging(args: argparse.Namespace) -> Path:
+    """
+    Setup logging file and write header.
+    
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Command line arguments
+        
+    Returns
+    -------
+    Path
+        Path to the log file
+    """
+    if args.mock:
+        logfile = Path(args.altzdir) / "logfile-mock.txt"
+    else:
+        logfile = Path(args.altzdir) / f"logfile-{args.survey}-{args.moon}.txt"
+    
+    # Write log header
+    try:
+        lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getlogin()}\n"
+    except OSError:
+        try:
+            lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('USER')}\n"
+        except (TypeError, KeyError):
+            try:
+                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('LOGNAME')}\n"
+            except (TypeError, KeyError):
+                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT\n"
+    
+    with open(logfile, 'a') as f:
+        f.write(lastupdate)
+        f.write(" ".join(sys.argv) + '\n')
+        f.write("Healpix NQSOs Nmatches\n")
+    
+    return logfile
+
+
+def parse_arguments() -> argparse.Namespace:
+    """
+    Parse command line arguments.
+    
+    Returns
+    -------
+    argparse.Namespace
+        Parsed command line arguments
+    """
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Split an afterburner into redshift catalogs organized by healpix"
+    )
+
+    parser.add_argument('-q', '--qsocat', type=str, default=None, required=True,
+                        help='Input QSO catalog')
+
+    parser.add_argument('-a', '--altzdir', type=str, default=None, required=True,
+                        help='Path to directory structure with healpix-based afterburner redshift catalogs')
+
+    parser.add_argument('-z', '--zfileroot', type=str, default="zafter", 
+                        required=False, help='Root name of healpix-based afterburner redshift catalogs')
+
+    parser.add_argument('-s', '--survey', type=str, default='main', required=False,
+                        help='Survey subdirectory [sv1, sv2, sv3, main], default is main')
+
+    parser.add_argument('-m', '--moon', type=str, default='dark', required=False,
+                        help='Moon brightness [bright, dark], default is dark')
+
+    parser.add_argument('--mock', default=False, required=False, action='store_true',
+                        help='Mock catalog?, default is False')
+
+    parser.add_argument('-l', '--logfile', type=str, default='logfile-{survey}-{moon}.txt', required=False,
+                        help='Name of log file written to outdir, default is logfile-{survey}-{moon}.txt')
+
+    parser.add_argument('-c', '--clobber', default=False, required=False, action='store_true', 
+                        help='Clobber (overwrite) BAL catalog if it already exists?')
+
+    parser.add_argument('-v', '--verbose', default=False, required=False, action='store_true', 
+                        help='Provide verbose output?')
+
+    parser.add_argument('--nproc', type=int, default=64, required=False,
+                        help='Number of processes for parallel processing (default: 64)')
+
+    parser.add_argument('--chunk-size', type=int, default=1000, required=False,
+                        help='Chunk size for memory-efficient processing (default: 1000)')
+
+    return parser.parse_args()
+
+
+def main() -> None:
+    """
+    Main function to split afterburner catalog into healpix-based catalogs.
+    
+    This function:
+    1. Reads the input QSO catalog
+    2. Calculates healpix indices for all QSOs
+    3. Groups QSOs by healpix
+    4. Creates individual healpix-based redshift catalogs
+    5. Processes healpix in parallel batches for performance
+    """
+    args = parse_arguments()
+    
     # Check the QSO catalog exists
-    if not os.path.isfile(args.qsocat):
-        print("Error: cannot find ", args.qsocat)
-        exit(1)
+    qsocat_path = Path(args.qsocat)
+    if not qsocat_path.exists():
+        print(f"Error: cannot find {qsocat_path}")
+        sys.exit(1)
     
     if args.verbose:
-        print(f"Reading QSO catalog: {args.qsocat}")
+        print(f"Reading QSO catalog: {qsocat_path}")
     
     # Read QSO catalog using fitsio for better performance
-    qcat = fitsio.read(args.qsocat)
+    try:
+        qcat = fitsio.read(str(qsocat_path))
+    except Exception as e:
+        print(f"Error reading QSO catalog {qsocat_path}: {e}")
+        sys.exit(1)
     
     if args.verbose:
         print(f"Loaded {len(qcat)} QSOs from catalog")
@@ -170,30 +315,10 @@ def main():
         print(f"Found {len(healpixels)} entries with {len(healpixlist)} unique healpix")
     
     # Setup output directory and logging
-    if not os.path.isdir(args.altzdir):
-        utils.pmmkdir(args.altzdir)
+    altzdir_path = Path(args.altzdir)
+    altzdir_path.mkdir(parents=True, exist_ok=True)
     
-    if args.mock:
-        logfile = os.path.join(args.altzdir, "logfile-mock.txt")
-    else:
-        logfile = os.path.join(args.altzdir, f"logfile-{args.survey}-{args.moon}.txt")
-    
-    # Write log header
-    try:
-        lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getlogin()}\n"
-    except:
-        try:
-            lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('USER')}\n"
-        except:
-            try:
-                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('LOGNAME')}\n"
-            except:
-                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT\n"
-    
-    with open(logfile, 'a') as f:
-        f.write(lastupdate)
-        f.write(" ".join(sys.argv) + '\n')
-        f.write("Healpix NQSOs Nmatches\n")
+    logfile = setup_logging(args)
     
     # Process healpix in parallel batches
     if args.nproc > 1 and len(healpixlist) > 1:
@@ -214,12 +339,16 @@ def main():
             
             # Collect results as they complete
             for future in as_completed(future_to_batch):
-                batch_results = future.result()
-                results.extend(batch_results)
-                
-                if args.verbose:
+                try:
+                    batch_results = future.result()
+                    results.extend(batch_results)
+                    
+                    if args.verbose:
+                        batch = future_to_batch[future]
+                        print(f"Completed batch with {len(batch)} healpix")
+                except Exception as e:
                     batch = future_to_batch[future]
-                    print(f"Completed batch with {len(batch)} healpix")
+                    print(f"Error processing batch with {len(batch)} healpix: {e}")
     else:
         # Sequential processing for small datasets or single process
         results = process_healpix_batch(healpixlist, qcat, healpixels, args)
@@ -238,6 +367,7 @@ def main():
         print(f"Finished processing {len(results)} healpix files with {total_qsos} total QSOs")
     
     print("Finished")
+
 
 if __name__ == "__main__":
     main()

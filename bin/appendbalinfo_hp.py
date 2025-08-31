@@ -1,16 +1,17 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
+Update existing QSO catalogue with BAL information from individual healpix catalogs.
 
-baltools.appendbalinfo_hp
-=========================
+This module utilizes functions from popqsotab.py to add empty BAL columns to existing
+QSO catalogues and populate them with information from individual BAL catalogs generated
+by runbalfinder.py. It processes healpix-based BAL catalogs and matches them to QSOs
+in the main catalog using TARGETID matching.
 
-Utilizes functinos from popqsotab.py to add empty BAL columns to existing
-QSO catalogue and add information from baltables to new catalogue.
-runbalfinder.py tables
+The module is optimized for NERSC systems with high core counts and includes
+parallel processing capabilities for efficient handling of large datasets.
 
-2021 Original code by Simon Filbert
-OPTIMIZED VERSION for NERSC systems with high core counts
-
+Author: Simon Filbert (2021), Optimized version for NERSC systems
+License: DESI Collaboration License
 """
 
 import os
@@ -21,29 +22,83 @@ import healpy as hp
 import fitsio
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
-
+from pathlib import Path
+from typing import List, Tuple, Optional, Dict, Any
 import argparse
 from time import gmtime, strftime
 
 from baltools import balconfig as bc
-# from baltools import fitbal
 from baltools import popqsotab as pt
 from baltools import utils
 
+# Set DESI environment
+os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
 
-balcols = ['PCA_COEFFS', 'PCA_CHI2', 'BAL_PROB', 'BI_CIV', 'ERR_BI_CIV', 'NCIV_2000', 'VMIN_CIV_2000', 'VMAX_CIV_2000', 'POSMIN_CIV_2000', 'FMIN_CIV_2000', 'AI_CIV', 'ERR_AI_CIV', 'NCIV_450', 'VMIN_CIV_450', 'VMAX_CIV_450', 'POSMIN_CIV_450', 'FMIN_CIV_450', 'BI_SIIV', 'ERR_BI_SIIV', 'NSIIV_2000', 'VMIN_SIIV_2000', 'VMAX_SIIV_2000', 'POSMIN_SIIV_2000', 'FMIN_SIIV_2000', 'AI_SIIV', 'ERR_AI_SIIV', 'NSIIV_450', 'VMIN_SIIV_450', 'VMAX_SIIV_450', 'POSMIN_SIIV_450', 'FMIN_SIIV_450', 'SNR_CIV']
+# Define BAL column names
+BAL_COLS = [
+    'PCA_COEFFS', 'PCA_CHI2', 'BAL_PROB', 'BI_CIV', 'ERR_BI_CIV', 'NCIV_2000',
+    'VMIN_CIV_2000', 'VMAX_CIV_2000', 'POSMIN_CIV_2000', 'FMIN_CIV_2000',
+    'AI_CIV', 'ERR_AI_CIV', 'NCIV_450', 'VMIN_CIV_450', 'VMAX_CIV_450',
+    'POSMIN_CIV_450', 'FMIN_CIV_450', 'BI_SIIV', 'ERR_BI_SIIV', 'NSIIV_2000',
+    'VMIN_SIIV_2000', 'VMAX_SIIV_2000', 'POSMIN_SIIV_2000', 'FMIN_SIIV_2000',
+    'AI_SIIV', 'ERR_AI_SIIV', 'NSIIV_450', 'VMIN_SIIV_450', 'VMAX_SIIV_450',
+    'POSMIN_SIIV_450', 'FMIN_SIIV_450', 'SNR_CIV'
+]
 
-def balcopy(qinfo, binfo):
-    for balcol in balcols: 
+
+def balcopy(qinfo: np.ndarray, binfo: np.ndarray) -> None:
+    """
+    Copy BAL properties from BAL catalog entry to QSO catalog entry.
+    
+    Parameters
+    ----------
+    qinfo : np.ndarray
+        QSO catalog entry to be updated
+    binfo : np.ndarray
+        BAL catalog entry containing the properties to copy
+    """
+    for balcol in BAL_COLS: 
         qinfo[balcol] = binfo[balcol]
     qinfo['BALMASK'] = 0
 
-def calculate_healpix_vectorized(ra, dec, nside=64):
-    """Calculate healpix for all coordinates at once using vectorized operations"""
+
+def calculate_healpix_vectorized(ra: np.ndarray, dec: np.ndarray, nside: int = 64) -> np.ndarray:
+    """
+    Calculate healpix indices for all coordinates using vectorized operations.
+    
+    Parameters
+    ----------
+    ra : np.ndarray
+        Right ascension coordinates in degrees
+    dec : np.ndarray
+        Declination coordinates in degrees
+    nside : int, optional
+        HEALPix nside parameter, by default 64
+        
+    Returns
+    -------
+    np.ndarray
+        Array of healpix indices for each coordinate pair
+    """
     return hp.ang2pix(nside, ra, dec, lonlat=True, nest=True)
 
-def match_targets_vectorized(qso_targetids, bal_targetids):
-    """Match targets using vectorized operations for better performance"""
+
+def match_targets_vectorized(qso_targetids: np.ndarray, bal_targetids: np.ndarray) -> List[Tuple[int, int]]:
+    """
+    Match targets using vectorized operations for better performance.
+    
+    Parameters
+    ----------
+    qso_targetids : np.ndarray
+        Array of TARGETIDs from QSO catalog
+    bal_targetids : np.ndarray
+        Array of TARGETIDs from BAL catalog
+        
+    Returns
+    -------
+    List[Tuple[int, int]]
+        List of (qso_index, bal_index) tuples for matched targets
+    """
     # Create a mapping from targetid to index
     qso_map = {tid: idx for idx, tid in enumerate(qso_targetids)}
     
@@ -55,8 +110,38 @@ def match_targets_vectorized(qso_targetids, bal_targetids):
     
     return matches
 
-def process_healpix_batch_with_qcat(healpix_batch, args, qcat, healpixels, baldir, survey, moon, mock):
-    """Process a batch of healpix pixels with access to the full QSO catalog"""
+
+def process_healpix_batch_with_qcat(healpix_batch: List[int], args: argparse.Namespace, 
+                                   qcat: np.ndarray, healpixels: np.ndarray, 
+                                   baldir: str, survey: str, moon: str, 
+                                   mock: bool) -> List[Tuple[int, np.ndarray]]:
+    """
+    Process a batch of healpix pixels with access to the full QSO catalog.
+    
+    Parameters
+    ----------
+    healpix_batch : List[int]
+        List of healpix indices to process
+    args : argparse.Namespace
+        Command line arguments
+    qcat : np.ndarray
+        QSO catalog data
+    healpixels : np.ndarray
+        Array of healpix indices for all QSOs
+    baldir : str
+        Directory containing BAL catalogs
+    survey : str
+        Survey name
+    moon : str
+        Moon brightness setting
+    mock : bool
+        Whether processing mock data
+        
+    Returns
+    -------
+    List[Tuple[int, np.ndarray]]
+        List of (qcat_index, bal_data) tuples for modifications to apply
+    """
     modifications = []  # List of (qcat_index, bal_data) tuples
     
     for healpix in healpix_batch:
@@ -64,14 +149,14 @@ def process_healpix_batch_with_qcat(healpix_batch, args, qcat, healpixels, baldi
         
         if mock: 
             balfilename = f"baltable-16-{healpix}.fits"
-            balfile = os.path.join(baldir, 'spectra-16', hpdir, str(healpix), balfilename)
+            balfile = Path(baldir) / 'spectra-16' / hpdir / str(healpix) / balfilename
         else: 
             balfilename = f"baltable-{survey}-{moon}-{healpix}.fits"
-            balfile = os.path.join(baldir, "healpix", survey, moon, hpdir, str(healpix), balfilename)
+            balfile = Path(baldir) / "healpix" / survey / moon / hpdir / str(healpix) / balfilename
         
         try: 
             # Use fitsio for faster reading
-            bcat = fitsio.read(balfile, ext='BALCAT')
+            bcat = fitsio.read(str(balfile), ext='BALCAT')
         except (FileNotFoundError, OSError):
             if args.verbose:
                 print(f"Warning: Did not find {balfile}")
@@ -103,70 +188,145 @@ def process_healpix_batch_with_qcat(healpix_batch, args, qcat, healpixels, baldi
     
     return modifications
 
-os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description="""Update existing QSO catalogue with BAL information""")
+def setup_logging(args: argparse.Namespace, baldir: str) -> Path:
+    """
+    Setup logging file and write header.
+    
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Command line arguments
+    baldir : str
+        BAL directory path
+        
+    Returns
+    -------
+    Path
+        Path to the log file
+    """
+    if args.mock: 
+        logfile = Path(baldir) / "logfile-mock.txt"
+    else: 
+        logfile = Path(baldir) / f"logfile-{args.survey}-{args.moon}.txt"
 
-parser.add_argument('-q', '--qsocat', type = str, default = None, required = True,
-                    help = 'Input QSO catalog')
+    # Write log header
+    try:
+        lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getlogin()}\n"
+    except OSError:
+        try:
+            lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('USER')}\n"
+        except (TypeError, KeyError):
+            try:
+                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('LOGNAME')}\n"
+            except (TypeError, KeyError):
+                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT\n"
+    
+    with open(logfile, 'a') as f:
+        f.write(lastupdate)
+        f.write(" ".join(sys.argv) + '\n')
+        f.write("Healpix NQSOs Nmatches\n")
+    
+    return logfile
 
-parser.add_argument('-b','--baldir', type=str, default = None, required=True,
-                    help='Path to directory structure with individual BAL catalogs')
 
-parser.add_argument('-o','--outcatfile', type=str, default="qso-balcat.fits", 
-                    required=False, help='Output QSO+BAL catalog')
+def parse_arguments() -> argparse.Namespace:
+    """
+    Parse command line arguments.
+    
+    Returns
+    -------
+    argparse.Namespace
+        Parsed command line arguments
+    """
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Update existing QSO catalogue with BAL information"
+    )
 
-parser.add_argument('-s', '--survey', type = str, default = 'main', required = False,
-                    help = 'Survey subdirectory [sv1, sv2, sv3, main], default is main')
+    parser.add_argument('-q', '--qsocat', type=str, default=None, required=True,
+                        help='Input QSO catalog')
 
-parser.add_argument('-m', '--moon', type = str, default = 'dark', required = False,
-                    help = 'Moon brightness [bright, dark], default is dark')
+    parser.add_argument('-b', '--baldir', type=str, default=None, required=True,
+                        help='Path to directory structure with individual BAL catalogs')
 
-parser.add_argument('--mock', default=False, required = False, action='store_true',
-                    help = 'Mock catalog?, default is False')
+    parser.add_argument('-o', '--outcatfile', type=str, default="qso-balcat.fits", 
+                        required=False, help='Output QSO+BAL catalog')
+
+    parser.add_argument('-s', '--survey', type=str, default='main', required=False,
+                        help='Survey subdirectory [sv1, sv2, sv3, main], default is main')
+
+    parser.add_argument('-m', '--moon', type=str, default='dark', required=False,
+                        help='Moon brightness [bright, dark], default is dark')
+
+    parser.add_argument('--mock', default=False, required=False, action='store_true',
+                        help='Mock catalog?, default is False')
                 
-parser.add_argument('-l','--logfile', type = str, default = 'logfile-{survey}-{moon}.txt', required = False,
-                    help = 'Name of log file written to outdir, default is logfile-{survey}-{moon}.txt')
+    parser.add_argument('-l', '--logfile', type=str, default='logfile-{survey}-{moon}.txt', required=False,
+                        help='Name of log file written to outdir, default is logfile-{survey}-{moon}.txt')
 
-parser.add_argument('-c','--clobber', default=False, required=False, action='store_true', 
-                    help='Clobber (overwrite) BAL catalog if it already exists?')
+    parser.add_argument('-c', '--clobber', default=False, required=False, action='store_true', 
+                        help='Clobber (overwrite) BAL catalog if it already exists?')
 
-parser.add_argument('-v','--verbose', default=False, required=False, action='store_true', 
-                    help = 'Provide verbose output?')
+    parser.add_argument('-v', '--verbose', default=False, required=False, action='store_true', 
+                        help='Provide verbose output?')
 
-parser.add_argument('-t','--alttemp', default=False, required=False, action='store_true',
-                    help = 'Use alternate components made by Allyson Brodzeller')
+    parser.add_argument('-t', '--alttemp', default=False, required=False, action='store_true',
+                        help='Use alternate components made by Allyson Brodzeller')
 
-parser.add_argument('--nproc', type=int, default=64, required=False,
-                    help='Number of processes for parallel processing (default: 64)')
+    parser.add_argument('--nproc', type=int, default=64, required=False,
+                        help='Number of processes for parallel processing (default: 64)')
 
-parser.add_argument('--chunk-size', type=int, default=100, required=False,
-                    help='Chunk size for parallel processing (default: 100)')
+    parser.add_argument('--chunk-size', type=int, default=100, required=False,
+                        help='Chunk size for parallel processing (default: 100)')
 
-args  = parser.parse_args()
+    return parser.parse_args()
 
-def main():
+
+def main() -> None:
+    """
+    Main function to update QSO catalog with BAL information.
+    
+    This function:
+    1. Reads the input QSO catalog and initializes BAL columns
+    2. Calculates healpix indices for all QSOs
+    3. Processes healpix-based BAL catalogs in parallel batches
+    4. Matches QSOs to BAL entries using TARGETID
+    5. Copies BAL properties to the QSO catalog
+    6. Applies redshift range masking
+    7. Writes the final output catalog
+    """
+    args = parse_arguments()
+    
     # Check the QSO catalog exists
-    if not os.path.isfile(args.qsocat):
-        print("Error: cannot find ", args.qsocat)
-        exit(1)
+    qsocat_path = Path(args.qsocat)
+    if not qsocat_path.exists():
+        print(f"Error: cannot find {qsocat_path}")
+        sys.exit(1)
     
     if args.verbose:
-        print(f"Reading QSO catalog: {args.qsocat}")
+        print(f"Reading QSO catalog: {qsocat_path}")
     
     # Full path to the output QSO+BAL catalog
-    outcat = os.path.join(args.outcatfile) 
+    outcat = Path(args.outcatfile)
 
     # Add empty BAL cols to qso cat and writes to outcat.
     # Stores return value (BAL card names) in cols
-    cols = pt.inittab(args.qsocat, outcat, alttemp=args.alttemp)
+    try:
+        cols = pt.inittab(str(qsocat_path), str(outcat), alttemp=args.alttemp)
+    except Exception as e:
+        print(f"Error initializing BAL columns: {e}")
+        sys.exit(1)
     
     if args.verbose:
         print(f"Initialized BAL columns in output catalog: {outcat}")
 
     # Read QSO catalog using fitsio for better performance
-    qcat = fitsio.read(outcat, ext=1)
+    try:
+        qcat = fitsio.read(str(outcat), ext=1)
+    except Exception as e:
+        print(f"Error reading QSO catalog {outcat}: {e}")
+        sys.exit(1)
 
     if args.verbose:
         print(f"Loaded {len(qcat)} QSOs from catalog")
@@ -180,34 +340,11 @@ def main():
     # Construct a list of unique healpix pixels
     healpixlist = np.unique(healpixels)
 
-    # Construct an array of indices for the QSO catalog
-    qcat_indices = np.arange(0, len(qcat), dtype=int)
-
     if args.verbose: 
         print(f"Found {len(healpixlist)} unique healpix")
 
     # Setup logging
-    if args.mock: 
-        logfile = os.path.join(args.baldir, "logfile-mock.txt")
-    else: 
-        logfile = os.path.join(args.baldir, f"logfile-{args.survey}-{args.moon}.txt")
-
-    # Write log header
-    try:
-        lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getlogin()}\n"
-    except:
-        try:
-            lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('USER')}\n"
-        except:
-            try:
-                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT by {os.getenv('LOGNAME')}\n"
-            except:
-                lastupdate = f"Last updated {strftime('%Y-%m-%d %H:%M:%S', gmtime())} UT\n"
-    
-    with open(logfile, 'a') as f:
-        f.write(lastupdate)
-        f.write(" ".join(sys.argv) + '\n')
-        f.write("Healpix NQSOs Nmatches\n")
+    logfile = setup_logging(args, args.baldir)
 
     # Process healpix in parallel batches
     all_modifications = []
@@ -224,7 +361,8 @@ def main():
         with ProcessPoolExecutor(max_workers=args.nproc) as executor:
             # Submit all batches
             future_to_batch = {
-                executor.submit(process_healpix_batch_with_qcat, batch, args, qcat, healpixels, args.baldir, args.survey, args.moon, args.mock): batch 
+                executor.submit(process_healpix_batch_with_qcat, batch, args, qcat, healpixels, 
+                               args.baldir, args.survey, args.moon, args.mock): batch 
                 for batch in healpix_batches
             }
             
@@ -242,7 +380,9 @@ def main():
                     print(f"Error processing batch with {len(batch)} healpix: {e}")
     else:
         # Sequential processing
-        all_modifications = process_healpix_batch_with_qcat(healpixlist, args, qcat, healpixels, args.baldir, args.survey, args.moon, args.mock)
+        all_modifications = process_healpix_batch_with_qcat(
+            healpixlist, args, qcat, healpixels, args.baldir, args.survey, args.moon, args.mock
+        )
 
     # Apply all modifications to the QSO catalog
     if args.verbose:
@@ -269,19 +409,24 @@ def main():
 
     # Apply redshift range mask
     zmask = qcat['Z'] >= bc.BAL_ZMIN
-    zmask = zmask*(qcat['Z'] <= bc.BAL_ZMAX)
-    zmask = ~zmask # check to True for out of redshift range
-    zbit = 2*np.ones(len(zmask), dtype=np.ubyte) # bitmask for out of redshift range
+    zmask = zmask * (qcat['Z'] <= bc.BAL_ZMAX)
+    zmask = ~zmask  # check to True for out of redshift range
+    zbit = 2 * np.ones(len(zmask), dtype=np.ubyte)  # bitmask for out of redshift range
     qcat['BALMASK'][zmask] += zbit[zmask]
 
     # Write final catalog using fitsio for better performance
-    fitsio.write(outcat, qcat, extname='ZCATALOG', clobber=True)
+    try:
+        fitsio.write(str(outcat), qcat, extname='ZCATALOG', clobber=True)
+    except Exception as e:
+        print(f"Error writing final catalog {outcat}: {e}")
+        sys.exit(1)
     
     if args.verbose:
         print(f"Wrote final catalog: {outcat}")
         print(f"Total matches: {total_matches}")
 
     print(f"Wrote {outcat}")
+
 
 if __name__ == "__main__":
     main() 
