@@ -159,8 +159,7 @@ def _process_ion_line(
     verbose: bool = False
 ) -> None:
     """
-    Helper function to find troughs on smoothed data and calculate BAL properties
-    on the original data.
+    Finds troughs using a local, BAL-free chi-squared to penalize the search.
     """
     balwave, balspec, balerror = idata
     speed = bc.c * (balwave - ion_lambda) / ion_lambda
@@ -168,8 +167,7 @@ def _process_ion_line(
     min_wave_req = ion_lambda * (1. + bc.VMIN_BAL / bc.c)
     if balwave[0] > min_wave_req:
         if verbose:
-            print(f"Skipping {ion_name}: Spectrum starts at {balwave[0]:.1f}Å, "
-                  f"but {min_wave_req:.1f}Å is needed.")
+            print(f"Skipping {ion_name}: Spectrum needs coverage to {min_wave_req:.1f}Å.")
         return
 
     # Define velocity indices
@@ -192,7 +190,27 @@ def _process_ion_line(
     norm_flux_ai_smooth = uniform_filter1d(norm_flux_ai, size=bc.SMOOTHING_WIDTH)
     sigma_ai_smooth = uniform_filter1d(sigma_ai, size=bc.SMOOTHING_WIDTH)
 
-    start_idx, end_idx = determine_troughs(norm_flux_ai_smooth, sigma_ai_smooth, speed_ai, bc.AI_MIN_WIDTH, is_ai=True)
+    # First Pass: Identify troughs without a chi-squared penalty to define continuum
+    initial_start, initial_end = determine_troughs(norm_flux_ai_smooth, sigma_ai_smooth, speed_ai, bc.AI_MIN_WIDTH, rchisq=1.0, is_ai=True)
+
+    # Calculate local rchisq on the continuum pixels found in the first pass
+    continuum_mask = np.ones_like(speed_ai, dtype=bool)
+    for s, e in zip(initial_start, initial_end):
+        continuum_mask[s:e+1] = False
+
+    cont_flux = flux_ai[continuum_mask]
+    cont_model = model_ai[continuum_mask]
+    cont_error = error_ai[continuum_mask]
+    
+    local_rchisq = 1.0 # Default if no continuum is found
+    if cont_flux.size > 1:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            chi_sq = np.sum(((cont_flux - cont_model) / cont_error)**2)
+            local_rchisq = chi_sq / (cont_flux.size - 1)
+    
+    # Final Pass: Identify troughs using the local_rchisq as a penalty
+    start_idx, end_idx = determine_troughs(norm_flux_ai_smooth, sigma_ai_smooth, speed_ai, bc.AI_MIN_WIDTH, rchisq=local_rchisq, is_ai=True)
 
     mask_ai = np.ones_like(speed_ai, dtype=bool)
     for i in range(len(start_idx)):
@@ -235,7 +253,7 @@ def _process_ion_line(
     norm_flux_bi_smooth = uniform_filter1d(norm_flux_bi, size=bc.SMOOTHING_WIDTH)
     sigma_bi_smooth = uniform_filter1d(sigma_bi, size=bc.SMOOTHING_WIDTH)
 
-    start_idx, end_idx = determine_troughs(norm_flux_bi_smooth, sigma_bi_smooth, speed_bi, bc.BI_MIN_WIDTH)
+    start_idx_bi, end_idx_bi = determine_troughs(norm_flux_bi_smooth, sigma_bi_smooth, speed_bi, bc.BI_MIN_WIDTH, rchisq=local_rchisq)
 
     for i in range(min(len(start_idx), bc.NBI)):
         s, e = start_idx[i], end_idx[i]
@@ -258,7 +276,7 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
     """
     Calculate BAL quantities by processing CIV and SiIV lines.
 
-    This function now delegates the core logic to the `_process_ion_line`
+    This function delegates the core logic to the `_process_ion_line`
     helper function to avoid code duplication.
     """
     balinfo = initialize()
