@@ -176,6 +176,7 @@ def _process_ion_line(
     """
     balwave, balspec, balerror = idata
     speed = bc.c * (balwave - ion_lambda) / ion_lambda
+    epsilon = 1e-9 # A small number to avoid division by near-zero values
 
     min_wave_req = ion_lambda * (1. + bc.VMIN_BAL / bc.c)
     if balwave[0] > min_wave_req:
@@ -196,9 +197,10 @@ def _process_ion_line(
     model_ai = model[idx_min_bal:idx_max_ai]
     error_ai = balerror[idx_min_bal:idx_max_ai]
 
-    # Safely divide, avoiding division by zero
-    norm_flux_ai = np.divide(flux_ai, model_ai, out=np.ones_like(model_ai), where=model_ai!=0)
-    sigma_ai = np.divide(error_ai, model_ai, out=np.full_like(model_ai, np.inf), where=model_ai!=0)
+    # Safely divide, using an epsilon to check for near-zero values
+    safe_condition_ai = np.abs(model_ai) > epsilon
+    norm_flux_ai = np.divide(flux_ai, model_ai, out=np.ones_like(model_ai), where=safe_condition_ai)
+    sigma_ai = np.divide(error_ai, model_ai, out=np.full_like(model_ai, np.inf), where=safe_condition_ai)
 
     start_idx, end_idx = determine_troughs(norm_flux_ai, sigma_ai, speed_ai, bc.AI_MIN_WIDTH, is_ai=True)
 
@@ -230,9 +232,10 @@ def _process_ion_line(
     model_bi = model[idx_min_bal:idx_max_bi]
     error_bi = balerror[idx_min_bal:idx_max_bi]
 
-    # Safely divide, avoiding division by zero
-    norm_flux_bi = np.divide(flux_bi, model_bi, out=np.ones_like(model_bi), where=model_bi!=0)
-    sigma_bi = np.divide(error_bi, model_bi, out=np.full_like(model_bi, np.inf), where=model_bi!=0)
+    # Safely divide, using an epsilon to check for near-zero values
+    safe_condition_bi = np.abs(model_bi) > epsilon
+    norm_flux_bi = np.divide(flux_bi, model_bi, out=np.ones_like(model_bi), where=safe_condition_bi)
+    sigma_bi = np.divide(error_bi, model_bi, out=np.full_like(model_bi, np.inf), where=safe_condition_bi)
 
     start_idx, end_idx = determine_troughs(norm_flux_bi, sigma_bi, speed_bi, bc.BI_MIN_WIDTH)
 
@@ -250,6 +253,7 @@ def _process_ion_line(
         balinfo[f'VMIN_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = -speed_bi[e]
         balinfo[f'FMIN_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = trough_flux[min_flux_idx]
         balinfo[f'POSMIN_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = -speed_bi[s:e+1][min_flux_idx]
+
 
 
 def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], verbose: bool = False) -> Dict:
