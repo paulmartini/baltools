@@ -36,6 +36,10 @@ ERROR_SCALING_FACTOR = 0.5  # Factor to scale error term in trough identificatio
 BAL_LAMBDA_MIN = 1261.    # Minimim wavelength for PCA fit
 BAL_LAMBDA_MAX = 2399.    # Maximum wavelength for PCA fit
 
+# Redshift range for BAL Catalog
+BAL_ZMIN = 1.57
+BAL_ZMAX = 5.0
+
 NPCA = 5	    # Number of PCA coefficients
 NBI = 5		    # Max number of potential BI troughs
 NAI = 17	    # Max number of potential AI troughs
