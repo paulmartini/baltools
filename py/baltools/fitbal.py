@@ -196,7 +196,6 @@ def _process_ion_line(
     model_ai = model[idx_min_bal:idx_max_ai]
     error_ai = balerror[idx_min_bal:idx_max_ai]
 
-    # Suppress known RuntimeWarnings for this block
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         norm_flux_ai = np.divide(flux_ai, model_ai, out=np.ones_like(model_ai), where=model_ai!=0)
@@ -208,7 +207,13 @@ def _process_ion_line(
     mask_ai = np.ones_like(speed_ai, dtype=bool)
     for i in range(len(start_idx)):
         mask_ai[start_idx[i]:end_idx[i] + 1] = False
-    difference = np.mean(np.abs(model_ai[mask_ai] - flux_ai[mask_ai]))
+    
+    # Check if the masked array is empty before taking the mean
+    masked_model_ai = model_ai[mask_ai]
+    if masked_model_ai.size > 0:
+        difference = np.mean(np.abs(masked_model_ai - flux_ai[mask_ai]))
+    else:
+        difference = 0.0 # Default value if no non-trough pixels exist
 
     for i in range(min(len(start_idx), bc.NAI)):
         s, e = start_idx[i], end_idx[i]
@@ -232,7 +237,6 @@ def _process_ion_line(
     model_bi = model[idx_min_bal:idx_max_bi]
     error_bi = balerror[idx_min_bal:idx_max_bi]
 
-    # Suppress known RuntimeWarnings for this block
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         norm_flux_bi = np.divide(flux_bi, model_bi, out=np.ones_like(model_bi), where=model_bi!=0)
