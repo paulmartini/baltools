@@ -42,9 +42,8 @@ BAL_COLS = [
     'POSMIN_CIV_450', 'FMIN_CIV_450', 'BI_SIIV', 'ERR_BI_SIIV', 'NSIIV_2000',
     'VMIN_SIIV_2000', 'VMAX_SIIV_2000', 'POSMIN_SIIV_2000', 'FMIN_SIIV_2000',
     'AI_SIIV', 'ERR_AI_SIIV', 'NSIIV_450', 'VMIN_SIIV_450', 'VMAX_SIIV_450',
-    'POSMIN_SIIV_450', 'FMIN_SIIV_450', 'SNR_CIV'
+    'POSMIN_SIIV_450', 'FMIN_SIIV_450', 'SNR_CIV', 'SNR_REDSIDE', 'SNR_FOREST'
 ]
-
 
 def balcopy(qinfo: np.ndarray, binfo: np.ndarray) -> None:
     """
@@ -57,8 +56,15 @@ def balcopy(qinfo: np.ndarray, binfo: np.ndarray) -> None:
     binfo : np.ndarray
         BAL catalog entry containing the properties to copy
     """
+
+    # Get the available column names from the source BAL catalog entry
+    source_cols = binfo.dtype.names
+
     for balcol in BAL_COLS: 
-        qinfo[balcol] = binfo[balcol]
+        # Only copy the column if it exists in the source file
+        if balcol in source_cols:
+            qinfo[balcol] = binfo[balcol]
+    
     qinfo['BALMASK'] = 0
 
 
