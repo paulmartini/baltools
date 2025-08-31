@@ -32,6 +32,7 @@ def initialize() -> Dict:
 
     balinfo = {
         'TROUGH_10K': 0, 'SNR_CIV': -1.,
+        'SNR_REDSIDE': -1., 'SNR_FOREST': -1.,
         'BI_CIV': 0., 'BI_CIV_ERR': 0., 'NCIV_2000': 0,
         'VMIN_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
         'VMAX_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
@@ -196,7 +197,26 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
             if idx_min_bal < idx_max_ai:
                 snr_slice = balspec[idx_min_bal:idx_max_ai] / balerror[idx_min_bal:idx_max_ai]
                 balinfo['SNR_CIV'] = np.median(snr_slice[np.isfinite(snr_slice)])
-    
+
+            # Calculate SNR_REDSIDE (1420-1480 Angstroms)
+            redside_min, redside_max = 1420., 1480.
+            # Condition: Only calculate if the full range is available
+            if balwave[0] <= redside_min and balwave[-1] >= redside_max:
+                idx1 = np.searchsorted(balwave, redside_min)
+                idx2 = np.searchsorted(balwave, redside_max)
+                snr_slice = balspec[idx1:idx2] / balerror[idx1:idx2]
+                balinfo['SNR_REDSIDE'] = np.median(snr_slice[np.isfinite(snr_slice)])
+                    
+            # Calculate SNR_FOREST (1040-1205 Angstroms)
+            forest_min, forest_max = 1040., 1205.
+            coverage_start = max(balwave[0], forest_min)
+            coverage_end = min(balwave[-1], forest_max)
+            if coverage_end - coverage_start >= 50.0:
+                idx1 = np.searchsorted(balwave, coverage_start)
+                idx2 = np.searchsorted(balwave, coverage_end)
+                snr_slice = balspec[idx1:idx2] / balerror[idx1:idx2]
+                balinfo['SNR_FOREST'] = np.median(snr_slice[np.isfinite(snr_slice)])
+
             # Normalize flux/error for CIV windows using safe division
             model_ai_civ = model[idx_min_bal:idx_max_ai]
             norm_flux_ai = np.divide(balspec[idx_min_bal:idx_max_ai], model_ai_civ, out=np.ones_like(model_ai_civ), where=model_ai_civ!=0)

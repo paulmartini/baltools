@@ -94,13 +94,20 @@ def cattobalinfo(array):
         info['SNR_CIV'] = array['SNR_CIV']
     except KeyError:
         info['SNR_CIV'] = -1.
+    try:
+        info['SNR_REDSIDE'] = array['SNR_REDSIDE']
+    except KeyError:
+        info['SNR_REDSIDE'] = -1.
+    try:
+        info['SNR_FOREST'] = array['SNR_FOREST']
+    except KeyError:
+        info['SNR_FOREST'] = -1.
 
     return info
 
 #
 # ------------ DESI routines ---------------
 #
-### Added argument pcaeigen. -Karish
 def initbaltab_desi(specdata, zdata, outputfile, pcaeigen, overwrite=False, release=None):
     '''
     Create an empty BAL table from a QSO catalog
@@ -203,6 +210,8 @@ def initbaltab_desi(specdata, zdata, outputfile, pcaeigen, overwrite=False, rele
     col53 = fits.Column(name='FMIN_SIIV_450', format='17E', array=zfloat_aicol)
 
     col54 = fits.Column(name='SNR_CIV', format='E', array=zfloat_col)
+    col55 = fits.Column(name='SNR_REDSIDE', format='E', array=zfloat_col)
+    col56 = fits.Column(name='SNR_FOREST', format='E', array=zfloat_col)
 
     balhead = fits.Header({'SIMPLE': True})
     balhead['EXTNAME'] = "BALCAT"
@@ -215,7 +224,7 @@ def initbaltab_desi(specdata, zdata, outputfile, pcaeigen, overwrite=False, rele
                                             col37, col38, col39, col40, col41,
                                             col42, col43, col44, col45, col46,
                                             col47, col48, col49, col50, col51,
-                                            col52, col53, col54], 
+                                            col52, col53, col54, col55, col56], 
                                             header=balhead)
 
     tabhdu.writeto(outputfile, overwrite=overwrite)
@@ -285,6 +294,8 @@ def updatebaltab_desi(targetid, balhdu, info, pcaout, pcaeigen):
     balhdu[1].data[qindx]['FMIN_SIIV_450'] = info['FMIN_SIIV_450']
 
     balhdu[1].data[qindx]['SNR_CIV'] = info['SNR_CIV']
+    balhdu[1].data[qindx]['SNR_REDSIDE'] = info['SNR_REDSIDE']
+    balhdu[1].data[qindx]['SNR_FOREST'] = info['SNR_FOREST']
 
     return balhdu
 
