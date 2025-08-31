@@ -165,8 +165,8 @@ def calculate_index(
 
 def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], verbose: bool = False) -> Dict:
     """
-    Calculates BAL quantities, following the original script's logic flow
-    but using modernized helper functions and safe division.
+    Calculates BAL quantities. Updated to use modernized helper functions and safe 
+    division.
     """
     balwave, balspec, balerror = idata
     balinfo = initialize()
@@ -177,25 +177,25 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
     idx_max_bi = np.searchsorted(speed_civ, -3000.)
     idx_max_ai = np.searchsorted(speed_civ, 0.)
 
-    if idx_min_bal < idx_max_ai:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        if idx_min_bal < idx_max_ai:
             snr_slice = balspec[idx_min_bal:idx_max_ai] / balerror[idx_min_bal:idx_max_ai]
             balinfo['SNR_CIV'] = np.median(snr_slice[np.isfinite(snr_slice)])
 
-    # Normalize flux/error for CIV windows using safe division
-    model_ai_civ = model[idx_min_bal:idx_max_ai]
-    norm_flux_ai = np.divide(balspec[idx_min_bal:idx_max_ai], model_ai_civ, out=np.ones_like(model_ai_civ), where=model_ai_civ!=0)
-    sigma_ai = np.divide(balerror[idx_min_bal:idx_max_ai], model_ai_civ, out=np.full_like(model_ai_civ, np.inf), where=model_ai_civ!=0)
-    
-    model_bi_civ = model[idx_min_bal:idx_max_bi]
-    norm_flux_bi = np.divide(balspec[idx_min_bal:idx_max_bi], model_bi_civ, out=np.ones_like(model_bi_civ), where=model_bi_civ!=0)
-    sigma_bi = np.divide(balerror[idx_min_bal:idx_max_bi], model_bi_civ, out=np.full_like(model_bi_civ, np.inf), where=model_bi_civ!=0)
+        # Normalize flux/error for CIV windows using safe division
+        model_ai_civ = model[idx_min_bal:idx_max_ai]
+        norm_flux_ai = np.divide(balspec[idx_min_bal:idx_max_ai], model_ai_civ, out=np.ones_like(model_ai_civ), where=model_ai_civ!=0)
+        sigma_ai = np.divide(balerror[idx_min_bal:idx_max_ai], model_ai_civ, out=np.full_like(model_ai_civ, np.inf), where=model_ai_civ!=0)
+        
+        model_bi_civ = model[idx_min_bal:idx_max_bi]
+        norm_flux_bi = np.divide(balspec[idx_min_bal:idx_max_bi], model_bi_civ, out=np.ones_like(model_bi_civ), where=model_bi_civ!=0)
+        sigma_bi = np.divide(balerror[idx_min_bal:idx_max_bi], model_bi_civ, out=np.full_like(model_bi_civ, np.inf), where=model_bi_civ!=0)
 
     # Step 1: Find CIV AI troughs
     start_ai_civ, end_ai_civ = determine_troughs(norm_flux_ai, sigma_ai, speed_civ[idx_min_bal:idx_max_ai], bc.AI_MIN_WIDTH, is_ai=True)
     
-    # Step 2: Calculate the single 'difference' metric based on CIV AI troughs
+    # Step 2: Calculate the single 'difference' metric
     continuum_mask = np.ones_like(norm_flux_ai, dtype=bool)
     for s, e in zip(start_ai_civ, end_ai_civ):
         continuum_mask[s:e+1] = False
@@ -242,14 +242,16 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
         idx_max_bi_siiv = np.searchsorted(speed_siiv, -3000.)
         idx_max_ai_siiv = np.searchsorted(speed_siiv, 0.)
 
-        # Normalize flux/error for SiIV windows using safe division
-        model_ai_siiv = model[idx_min_bal_siiv:idx_max_ai_siiv]
-        norm_flux_ai_siiv = np.divide(balspec[idx_min_bal_siiv:idx_max_ai_siiv], model_ai_siiv, out=np.ones_like(model_ai_siiv), where=model_ai_siiv!=0)
-        sigma_ai_siiv = np.divide(balerror[idx_min_bal_siiv:idx_max_ai_siiv], model_ai_siiv, out=np.full_like(model_ai_siiv, np.inf), where=model_ai_siiv!=0)
-        
-        model_bi_siiv = model[idx_min_bal_siiv:idx_max_bi_siiv]
-        norm_flux_bi_siiv = np.divide(balspec[idx_min_bal_siiv:idx_max_bi_siiv], model_bi_siiv, out=np.ones_like(model_bi_siiv), where=model_bi_siiv!=0)
-        sigma_bi_siiv = np.divide(balerror[idx_min_bal_siiv:idx_max_bi_siiv], model_bi_siiv, out=np.full_like(model_bi_siiv, np.inf), where=model_bi_siiv!=0)
+        # Suppress warnings for SiIV normalization as well
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            model_ai_siiv = model[idx_min_bal_siiv:idx_max_ai_siiv]
+            norm_flux_ai_siiv = np.divide(balspec[idx_min_bal_siiv:idx_max_ai_siiv], model_ai_siiv, out=np.ones_like(model_ai_siiv), where=model_ai_siiv!=0)
+            sigma_ai_siiv = np.divide(balerror[idx_min_bal_siiv:idx_max_ai_siiv], model_ai_siiv, out=np.full_like(model_ai_siiv, np.inf), where=model_ai_siiv!=0)
+            
+            model_bi_siiv = model[idx_min_bal_siiv:idx_max_bi_siiv]
+            norm_flux_bi_siiv = np.divide(balspec[idx_min_bal_siiv:idx_max_bi_siiv], model_bi_siiv, out=np.ones_like(model_bi_siiv), where=model_bi_siiv!=0)
+            sigma_bi_siiv = np.divide(balerror[idx_min_bal_siiv:idx_max_bi_siiv], model_bi_siiv, out=np.full_like(model_bi_siiv, np.inf), where=model_bi_siiv!=0)
 
         # Find and Measure SiIV AI troughs, using CIV difference
         start_ai_siiv, end_ai_siiv = determine_troughs(norm_flux_ai_siiv, sigma_ai_siiv, speed_siiv[idx_min_bal_siiv:idx_max_ai_siiv], bc.AI_MIN_WIDTH, is_ai=True)
