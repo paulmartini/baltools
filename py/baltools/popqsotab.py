@@ -175,7 +175,8 @@ def inittab(qsocatpath, outtab, alttemp=False, truthlist=False):
     # Seperate column not populated in runbalfinder which serves as a bitmask
     col31 = fits.Column(name='BALMASK', format='B', array=zbyte_col) # default is '1' (not found in baltable)
     col32 = fits.Column(name='SNR_CIV', format='E', array=zfloat_col)
-
+    col33 = fits.Column(name='SNR_REDSIDE', format='E', array=...)
+    col34 = fits.Column(name='SNR_FOREST', format='E', array=...)
     
     # Columns relating to BAL information from runbalfinder
     PCAcols = fits.ColDefs([col0, col1]) 
@@ -188,7 +189,7 @@ def inittab(qsocatpath, outtab, alttemp=False, truthlist=False):
     if truthlist: 
         BALcols = col2 + CIVcols 
     else: 
-        BALcols  = PCAcols + col2 + CIVcols + SiIVcols + col31 + col32
+        BALcols  = PCAcols + col2 + CIVcols + SiIVcols + col31 + col32 + col33 + col34 
 
     totcols = catcols + BALcols 
     
