@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.optimize as opt
 from numpy.typing import NDArray
+from scipy.ndimage import uniform_filter1d
 
 from baltools import balconfig as bc
 
@@ -71,7 +72,7 @@ def determine_troughs(
     is_ai: bool = False
 ) -> Tuple[List[int], List[int]]:
     """
-    Identifies absorption troughs, with logic to allow a single-pixel gap to be bridged.
+    Identifies absorption troughs in a (typically smoothed) normalized spectrum.
     """
     start_indices, end_indices = [], []
     expression = (1. - norm_flux / bc.CONTINUUM_THRESHOLD) - bc.ERROR_SCALING_FACTOR * norm_sigma
@@ -80,48 +81,39 @@ def determine_troughs(
         return [], []
 
     vel_range = 0.0
-    start_idx = 0
     in_trough = False
-    i = 0
-    while i < len(expression):
-        if expression[i] > 0:
-            if not in_trough:
-                start_idx = i
-                in_trough = True
-                vel_range = 0.0001
-            elif i > 0:
+    start_idx = 0
+    for i in range(len(expression)):
+        is_absorbed = expression[i] > 0
+        if is_absorbed and not in_trough:
+            start_idx = i
+            in_trough = True
+            vel_range = 0.0001
+        elif is_absorbed and in_trough:
+            if i > 0:
                 vel_range += speed[i] - speed[i - 1]
-            i += 1
-        else: # Not in absorption
-            # Check for a single-pixel bridge
-            is_bridged = (in_trough and i + 1 < len(expression) and expression[i+1] > 0)
-            if is_bridged:
-                vel_range += speed[i+1] - speed[i-1] # Bridge the gap
-                i += 2 # Skip the current pixel and the next absorbed one
-            else:
-                # End of trough, check width
-                if in_trough and vel_range > min_width:
-                    end_idx = i - 1
-                    if is_ai:
-                        trough_flux = norm_flux[start_idx:end_idx + 1]
-                        trough_sigma = norm_sigma[start_idx:end_idx + 1]
-                        mean_flux = np.mean(trough_flux)
-                        mean_sigma = np.mean(trough_sigma) / np.sqrt(len(trough_flux))
-                        if (1. - (mean_flux + 3.0 * mean_sigma) / bc.CONTINUUM_THRESHOLD) > 0:
-                            start_indices.append(start_idx)
-                            end_indices.append(end_idx)
-                    else:
+        elif not is_absorbed and in_trough:
+            if vel_range > min_width:
+                end_idx = i - 1
+                if is_ai:
+                    # Note: Significance test is still on the smoothed data
+                    trough_flux = norm_flux[start_idx:end_idx + 1]
+                    trough_sigma = norm_sigma[start_idx:end_idx + 1]
+                    mean_flux = np.mean(trough_flux)
+                    mean_sigma = np.mean(trough_sigma) / np.sqrt(len(trough_flux))
+                    if (1. - (mean_flux + 3.0 * mean_sigma) / bc.CONTINUUM_THRESHOLD) > 0:
                         start_indices.append(start_idx)
                         end_indices.append(end_idx)
-                in_trough = False
-                vel_range = 0.0
-                i += 1
-    
+                else:
+                    start_indices.append(start_idx)
+                    end_indices.append(end_idx)
+            in_trough = False
+
     # Handle trough extending to the end of the array
     if in_trough and vel_range > min_width:
-        end_indices.append(len(expression) - 1)
         start_indices.append(start_idx)
-        
+        end_indices.append(len(expression) - 1)
+
     return start_indices, end_indices
 
 
@@ -167,8 +159,8 @@ def _process_ion_line(
     verbose: bool = False
 ) -> None:
     """
-    Helper function to find troughs and calculate BAL properties for a single ion.
-    This function populates the `balinfo` dictionary directly.
+    Helper function to find troughs on smoothed data and calculate BAL properties
+    on the original data.
     """
     balwave, balspec, balerror = idata
     speed = bc.c * (balwave - ion_lambda) / ion_lambda
@@ -182,7 +174,6 @@ def _process_ion_line(
 
     # Define velocity indices
     idx_min_bal = np.searchsorted(speed, bc.VMIN_BAL)
-    idx_max_bal = np.searchsorted(speed, bc.VMAX_BAL)
     idx_max_bi = np.searchsorted(speed, bc.BI_VMAX)
     idx_max_ai = np.searchsorted(speed, bc.AI_VMAX)
 
@@ -197,35 +188,37 @@ def _process_ion_line(
         norm_flux_ai = np.divide(flux_ai, model_ai, out=np.ones_like(model_ai), where=model_ai!=0)
         sigma_ai = np.divide(error_ai, model_ai, out=np.full_like(model_ai, np.inf), where=model_ai!=0)
 
-    start_idx, end_idx = determine_troughs(norm_flux_ai, sigma_ai, speed_ai, bc.AI_MIN_WIDTH, is_ai=True)
+    # Smooth the data for trough *identification*
+    norm_flux_ai_smooth = uniform_filter1d(norm_flux_ai, size=bc.SMOOTHING_WIDTH)
+    sigma_ai_smooth = uniform_filter1d(sigma_ai, size=bc.SMOOTHING_WIDTH)
 
-    # Create mask to find non-trough regions for `difference` calculation
+    start_idx, end_idx = determine_troughs(norm_flux_ai_smooth, sigma_ai_smooth, speed_ai, bc.AI_MIN_WIDTH, is_ai=True)
+
     mask_ai = np.ones_like(speed_ai, dtype=bool)
     for i in range(len(start_idx)):
         mask_ai[start_idx[i]:end_idx[i] + 1] = False
-    
-    # Check if the masked array is empty before taking the mean
+
     masked_model_ai = model_ai[mask_ai]
     if masked_model_ai.size > 0:
         difference = np.mean(np.abs(masked_model_ai - flux_ai[mask_ai]))
     else:
-        difference = 0.0 # Default value if no non-trough pixels exist
+        difference = 0.0
 
     for i in range(min(len(start_idx), bc.NAI)):
         s, e = start_idx[i], end_idx[i]
+        # Perform measurement on the ORIGINAL, UNSMOOTHED data
         ai, ai_var = calculate_index(speed_ai[s:e+1], model_ai[s:e+1], norm_flux_ai[s:e+1], sigma_ai[s:e+1], difference, bc.AI_MIN_WIDTH)
 
         balinfo[f'AI_{ion_name}'] += ai
         balinfo[f'AI_{ion_name}_ERR'] += ai_var
         balinfo[f'N{ion_name}_{int(bc.AI_MIN_WIDTH)}'] += 1
 
-        trough_flux = norm_flux_ai[s:e+1]
+        trough_flux = norm_flux_ai[s:e+1] # Use original flux for FMIN
         min_flux_idx = np.argmin(trough_flux)
         balinfo[f'VMAX_{ion_name}_{int(bc.AI_MIN_WIDTH)}'][i] = -speed_ai[s]
         balinfo[f'VMIN_{ion_name}_{int(bc.AI_MIN_WIDTH)}'][i] = -speed_ai[e]
         balinfo[f'FMIN_{ion_name}_{int(bc.AI_MIN_WIDTH)}'][i] = trough_flux[min_flux_idx]
         balinfo[f'POSMIN_{ion_name}_{int(bc.AI_MIN_WIDTH)}'][i] = -speed_ai[s:e+1][min_flux_idx]
-
 
     # --- BI Calculation ---
     speed_bi = speed[idx_min_bal:idx_max_bi]
@@ -238,17 +231,22 @@ def _process_ion_line(
         norm_flux_bi = np.divide(flux_bi, model_bi, out=np.ones_like(model_bi), where=model_bi!=0)
         sigma_bi = np.divide(error_bi, model_bi, out=np.full_like(model_bi, np.inf), where=model_bi!=0)
 
-    start_idx, end_idx = determine_troughs(norm_flux_bi, sigma_bi, speed_bi, bc.BI_MIN_WIDTH)
+    # Smooth the data for trough *identification*
+    norm_flux_bi_smooth = uniform_filter1d(norm_flux_bi, size=bc.SMOOTHING_WIDTH)
+    sigma_bi_smooth = uniform_filter1d(sigma_bi, size=bc.SMOOTHING_WIDTH)
+
+    start_idx, end_idx = determine_troughs(norm_flux_bi_smooth, sigma_bi_smooth, speed_bi, bc.BI_MIN_WIDTH)
 
     for i in range(min(len(start_idx), bc.NBI)):
         s, e = start_idx[i], end_idx[i]
+        # Perform measurement on the ORIGINAL, UNSMOOTHED data
         bi, bi_var = calculate_index(speed_bi[s:e+1], model_bi[s:e+1], norm_flux_bi[s:e+1], sigma_bi[s:e+1], difference, bc.BI_MIN_WIDTH)
 
         balinfo[f'BI_{ion_name}'] += bi
         balinfo[f'BI_{ion_name}_ERR'] += bi_var
         balinfo[f'N{ion_name}_{int(bc.BI_MIN_WIDTH)}'] += 1
 
-        trough_flux = norm_flux_bi[s:e+1]
+        trough_flux = norm_flux_bi[s:e+1] # Use original flux for FMIN
         min_flux_idx = np.argmin(trough_flux)
         balinfo[f'VMAX_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = -speed_bi[s]
         balinfo[f'VMIN_{ion_name}_{int(bc.BI_MIN_WIDTH)}'][i] = -speed_bi[e]
