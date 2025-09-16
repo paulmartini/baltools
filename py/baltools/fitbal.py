@@ -198,25 +198,6 @@ def calculatebalinfo(idata: NDArray[np.float64], model: NDArray[np.float64], ver
                 snr_slice = balspec[idx_min_bal:idx_max_ai] / balerror[idx_min_bal:idx_max_ai]
                 balinfo['SNR_CIV'] = np.median(snr_slice[np.isfinite(snr_slice)])
 
-            # Calculate SNR_REDSIDE (1420-1480 Angstroms)
-            redside_min, redside_max = 1420., 1480.
-            # Condition: Only calculate if the full range is available
-            if balwave[0] <= redside_min and balwave[-1] >= redside_max:
-                idx1 = np.searchsorted(balwave, redside_min)
-                idx2 = np.searchsorted(balwave, redside_max)
-                snr_slice = balspec[idx1:idx2] / balerror[idx1:idx2]
-                balinfo['SNR_REDSIDE'] = np.median(snr_slice[np.isfinite(snr_slice)])
-                    
-            # Calculate SNR_FOREST (1040-1205 Angstroms)
-            forest_min, forest_max = 1040., 1205.
-            coverage_start = max(balwave[0], forest_min)
-            coverage_end = min(balwave[-1], forest_max)
-            if coverage_end - coverage_start >= 50.0:
-                idx1 = np.searchsorted(balwave, coverage_start)
-                idx2 = np.searchsorted(balwave, coverage_end)
-                snr_slice = balspec[idx1:idx2] / balerror[idx1:idx2]
-                balinfo['SNR_FOREST'] = np.median(snr_slice[np.isfinite(snr_slice)])
-
             # Normalize flux/error for CIV windows using safe division
             model_ai_civ = model[idx_min_bal:idx_max_ai]
             norm_flux_ai = np.divide(balspec[idx_min_bal:idx_max_ai], model_ai_civ, out=np.ones_like(model_ai_civ), where=model_ai_civ!=0)
@@ -426,9 +407,42 @@ def calcbalparams(
     if wave_rest[-1] < bc.lambdaCIV or wave_rest[0] > bc.lambdaCIV:
         raise RuntimeError("Spectrum does not cover the CIV line region.")
 
+    # interpolate the PCA eigenspectra onto this wavelength grid
     pca_eigen_interp = [np.interp(wave_rest, pcaeigen['WAVE'], pcaeigen[name])
                         for name in pcaeigen.dtype.names if name != 'WAVE']
 
+    # compute the SNR values before trimming
+    flux_full = qsospec['flux']
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        ivar_full = qsospec['ivar']
+        sigma_full = np.nan_to_num(np.sqrt(1.0 / ivar_full))
+    snr_full = np.divide(flux_full, sigma_full, out=np.zeros_like(flux_full), where=sigma_full > 0)
+    
+    # Calculate SNR_FOREST (1040, 1205, require at least 50A) 
+    forest_min, forest_max = 1040., 1205.
+    coverage_start = max(wave_rest[0], forest_min)
+    coverage_end = min(wave_rest[-1], forest_max)
+    if coverage_end - coverage_start >= 50.:
+        i1 = np.searchsorted(wave_rest, max(forest_min, wave_rest[0]))
+        i2 = np.searchsorted(wave_rest, min(forest_max, wave_rest[-1]))
+        if i2 - i1 >= 1:
+            snr_forest = np.median(snr_full[i1:i2][np.isfinite(snr_full[i1:i2])])
+    else:
+        snr_forest = -1.
+
+    # Calculate SNR_REDSIDE (1420-1480 Angstroms)
+    redside_min, redside_max = 1420., 1480.
+    # Condition: Only calculate if the full range is available
+    if wave_rest[0] <= redside_min and wave_rest[-1] >= redside_max:
+        i1 = np.searchsorted(wave_rest, redside_min)
+        i2 = np.searchsorted(wave_rest, redside_max)
+        if i2 - i1 >= 1: 
+            snr_redside = np.median(snr_full[i1:i2][np.isfinite(snr_full[i1:i2])])
+    else: 
+        snr_redside = -1.  
+
+    # Trim down to the BAL region for remaining calculations
     idx1 = find_nearest(wave_rest, bc.BAL_LAMBDA_MIN) + 1 if bc.BAL_LAMBDA_MIN > wave_rest[0] else 0
     idx2 = find_nearest(wave_rest, bc.BAL_LAMBDA_MAX) - 1 if bc.BAL_LAMBDA_MAX < wave_rest[-1] else len(wave_rest) - 1
 
@@ -461,6 +475,9 @@ def calcbalparams(
             calcinfo = calculatebalinfo(idata, qsospec['model'][idx1:idx2], verbose)
             calcmask = baltomask(calcinfo, balwave)
             calcpcaout[:len(ipca)] = -1. # Invalidate PCA coeffs
+
+    calcinfo['SNR_REDSIDE'] = snr_redside
+    calcinfo['SNR_FOREST'] = snr_forest
 
     calcpcaout = np.append(calcpcaout, sdsschi2)
     return calcinfo, calcpcaout, calcmask
