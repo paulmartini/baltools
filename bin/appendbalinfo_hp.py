@@ -78,7 +78,7 @@ def match_targets(qso_targetids, bal_targetids):
 
 def process_healpix_chunk(
     healpix_chunk,
-    qsocat_path,
+    outcat,
     baldir,
     survey,
     moon,
@@ -101,8 +101,8 @@ def process_healpix_chunk(
 
     modifications = []
 
-    # Load QSO catalog
-    qcat = fitsio.read(str(qsocat_path), ext=1)
+    # Load the new QSO catalog
+    qcat = fitsio.read(str(outcat), ext=1)
     healpixels = calculate_healpix(qcat, mock)
     hindxs = np.arange(0, len(qcat), dtype=int)
 
@@ -171,7 +171,7 @@ def main():
 
     # Add empty BAL columns to QSO catalog, write to outcat
     cols = pt.inittab(str(qsocat_path), str(outcat), alttemp=args.alttemp)
-    qcat = fitsio.read(str(qsocat_path), ext=1)
+    qcat = fitsio.read(str(outcat), ext=1)
 
     # Calculate healpix for every QSO
     healpixels = calculate_healpix(qcat, args.mock)
