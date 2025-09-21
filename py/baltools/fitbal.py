@@ -20,6 +20,21 @@ from baltools import balconfig as bc
 
 debug = False
 
+def safe_divide(numerator, denominator, fill_value=np.inf, min_abs_denom=1e-8, warn_name=""):
+    """
+    Element-wise division, returns fill_value where denominator is zero or close to zero.
+    Warns if denominator contains zeros or very small values.
+    """
+    mask = np.isfinite(denominator) & (np.abs(denominator) > min_abs_denom)
+    if not np.all(mask):
+        zero_count = np.sum(~mask)
+        msg = f"WARNING: {zero_count} entries in {warn_name} denominator are zero or below {min_abs_denom}."
+        print(msg)
+    result = np.full_like(denominator, fill_value)
+    with np.errstate(over='ignore', divide='ignore', invalid='ignore'):
+        result[mask] = numerator[mask] / denominator[mask]
+    return result
+
 
 # ==============================================================================
 # 1. DICTIONARY AND DATA INITIALIZATION
@@ -257,8 +272,6 @@ def calculatebalinfo(idata, model, verbose=False):
         dictionary of BAL parameters
     '''
 
-    # PM Note: Formerly called calculatedr14
-
     balwave = idata[0]
     balspec = idata[1]
     balerror = idata[2]
@@ -282,8 +295,7 @@ def calculatebalinfo(idata, model, verbose=False):
     speed_plot = speed
     speed_min = np.where(speed >= bc.VMIN_BAL)[0][0]
     plotmin = speed_min # Index of about -25000. 
-    # plotmax = plotmin + 500
-    plotmax = np.where(speed >= bc.VMAX_BAL)[0][0]   # Changed 29 Mar 2020 by PM
+    plotmax = np.where(speed >= bc.VMAX_BAL)[0][0]
     speed_c = speed[plotmin:plotmax]
     speed_max_bi = np.where(speed >= -3000)[0][0]
     speed_max_ai = np.where(speed >= 0)[0][0]
@@ -291,19 +303,34 @@ def calculatebalinfo(idata, model, verbose=False):
     speed_c_ai = speed[speed_min:speed_max_ai]
 
     # Produce spectra for AI, BI determination that are normalized by the model
-    #normal_flux_bi = balspec[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
-    #normal_flux_ai = balspec[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
-    model_1_origin_safe = np.clip(model_1_origin, 1e-10, None)
-    normal_flux_bi = np.divide(balspec[plotmin:speed_max_bi], model_1_origin_safe[plotmin:speed_max_bi], out=np.full_like(model_1_origin_safe[plotmin:speed_max_bi], np.inf), where=model_1_origin_safe[plotmin:speed_max_bi] !=0)
-    normal_flux_ai = np.divide(balspec[plotmin:speed_max_ai], model_1_origin_safe[plotmin:speed_max_ai], out=np.full_like(model_1_origin_safe[plotmin:speed_max_ai], np.inf), where=model_1_origin_safe[plotmin:speed_max_ai] !=0)
-    #sigma_bi = sigma_origin[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
-    #sigma_ai = sigma_origin[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
-    sigma_bi = np.divide(sigma_origin[plotmin:speed_max_bi], model_1_origin_safe[plotmin:speed_max_bi], out=np.full_like(model_1_origin_safe[plotmin:speed_max_bi], np.inf), where=model_1_origin_safe[plotmin:speed_max_bi] !=0)
-    sigma_ai = np.divide(sigma_origin[plotmin:speed_max_ai], model_1_origin_safe[plotmin:speed_max_ai], out=np.full_like(model_1_origin_safe[plotmin:speed_max_ai], np.inf), where=model_1_origin_safe[plotmin:speed_max_ai] !=0)
+    normal_flux_bi = safe_divide(
+        balspec[plotmin:speed_max_bi],
+        model_1_origin[plotmin:speed_max_bi],
+        warn_name="normal_flux_bi"
+    )
+    normal_flux_ai = safe_divide(
+        balspec[plotmin:speed_max_ai],
+        model_1_origin[plotmin:speed_max_ai],
+        warn_name="normal_flux_ai"
+    )
+    sigma_bi = safe_divide(
+        sigma_origin[plotmin:speed_max_bi],
+        model_1_origin[plotmin:speed_max_bi],
+        warn_name="sigma_bi"
+    )
+    sigma_ai = safe_divide(
+        sigma_origin[plotmin:speed_max_ai],
+        model_1_origin[plotmin:speed_max_ai],
+        warn_name="sigma_ai"
+    )
 
     # Compute the median SNR over the range from -25000 to 0 km/s
     # balinfo['SNR_CIV'] = np.median( balspec[plotmin:speed_max_ai] / np.sqrt( sigma_origin[plotmin:speed_max_ai] ) ) 
-    balinfo['SNR_CIV'] = np.median( balspec[plotmin:speed_max_ai] / ( sigma_origin[plotmin:speed_max_ai] ) ) 
+    balinfo['SNR_CIV'] = np.median(safe_divide(
+        balspec[plotmin:speed_max_ai],
+        sigma_origin[plotmin:speed_max_ai],
+        warn_name="SNR_CIV"
+    ))
 
     if verbose:
         print("calculatebalinfo: CIV -- ") 
@@ -433,24 +460,33 @@ def calculatebalinfo(idata, model, verbose=False):
         speed_min = np.where(speed >= bc.VMIN_BAL)[0][0]
         speed_max = np.where(speed >= bc.VMAX_BAL)[0][0]
         plotmin = speed_min
+        plotmax = np.where(speed >= bc.VMAX_BAL)[0][0]   # Changed 29 Mar 2020 by PM
         speed_max_bi = np.where(speed >= -3000 )[0][0]
         speed_max_ai = np.where(speed >= 0)[0][0]
         speed_c_bi = speed[speed_min:speed_max_bi]
         speed_c_ai = speed[speed_min:speed_max_ai]
-        # normal_flux = balspec[speed_min:speed_max] / model_1_origin[speed_min:speed_max]
         speed_c = speed[speed_min:speed_max]
-        #normal_flux_bi = balspec[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
-        #normal_flux_ai = balspec[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
-        normal_flux_bi = np.divide(balspec[plotmin:speed_max_bi], model_1_origin_safe[plotmin:speed_max_bi], out=np.full_like(model_1_origin_safe[plotmin:speed_max_bi], np.inf), where=model_1_origin_safe[plotmin:speed_max_bi] !=0)
-        normal_flux_ai = np.divide(balspec[plotmin:speed_max_ai], model_1_origin_safe[plotmin:speed_max_ai], out=np.full_like(model_1_origin_safe[plotmin:speed_max_ai], np.inf), where=model_1_origin_safe[plotmin:speed_max_ai] !=0)
-
-        # plotmax = plotmin + 500
-        plotmax = np.where(speed >= bc.VMAX_BAL)[0][0]   # Changed 29 Mar 2020 by PM
-        #sigma_bi = sigma_origin[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
-        #sigma_ai = sigma_origin[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
-        sigma_bi = np.divide(sigma_origin[plotmin:speed_max_bi], model_1_origin_safe[plotmin:speed_max_bi], out=np.full_like(model_1_origin_safe[plotmin:speed_max_bi], np.inf), where=model_1_origin_safe[plotmin:speed_max_bi] !=0)
-        sigma_ai = np.divide(sigma_origin[plotmin:speed_max_ai], model_1_origin_safe[plotmin:speed_max_ai], out=np.full_like(model_1_origin_safe[plotmin:speed_max_ai], np.inf), where=model_1_origin_safe[plotmin:speed_max_ai] !=0)
-
+        # Safe division for normalization
+        normal_flux_bi = safe_divide(
+            balspec[plotmin:speed_max_bi],
+            model_1_origin[plotmin:speed_max_bi],
+            warn_name="normal_flux_bi"
+        )
+        normal_flux_ai = safe_divide(
+            balspec[plotmin:speed_max_ai],
+            model_1_origin[plotmin:speed_max_ai],
+            warn_name="normal_flux_ai"
+        )
+        sigma_bi = safe_divide(
+            sigma_origin[plotmin:speed_max_bi],
+            model_1_origin[plotmin:speed_max_bi],
+            warn_name="sigma_bi"
+        )
+        sigma_ai = safe_divide(
+            sigma_origin[plotmin:speed_max_ai],
+            model_1_origin[plotmin:speed_max_ai],
+            warn_name="sigma_ai"
+        )
 
         # Determine SiIV AI troughs
         if np.median(balspec[plotmin:speed_max_ai]) > np.median(sigma_origin[plotmin:speed_max_ai]): 
@@ -684,7 +720,7 @@ def sdsschisq(qsospec, zspec):
     return rchisq
 
 
-def fitpca(idata, zspec, ipca, mmask):
+def fitpca(idata, ipca, mmask):
     '''
     Fit PCA components to QSO spectrum in rest frame. PCA components
     are interpolated to match QSO spectrum. Wavelength region trimmed to 
@@ -694,8 +730,6 @@ def fitpca(idata, zspec, ipca, mmask):
     ----------
     idata : 2-d float array
         wave_rest, flux, error of SDSS spectrum region to fit
-    zspec : float
-        redshift of QSO
     ipca : 2-d float array
         PCA components interpolated to match wave_rest
     mmask : boolean array
@@ -854,39 +888,50 @@ def calcbalparams(qsospec, pcaeigen, zspec, maxiter=10, verbose=False):
         snr_redside = -1.
 
     # Trim down to the BAL region for remaining calculations
-    idx1 = find_nearest(wave_rest, bc.BAL_LAMBDA_MIN) + 1 if bc.BAL_LAMBDA_MIN > wave_rest[0] else 0
-    idx2 = find_nearest(wave_rest, bc.BAL_LAMBDA_MAX) - 1 if bc.BAL_LAMBDA_MAX < wave_rest[-1] else len(wave_rest) - 1
+    indx1 = find_nearest(wave_rest, bc.BAL_LAMBDA_MIN) + 1 if bc.BAL_LAMBDA_MIN > wave_rest[0] else 0
+    indx2 = find_nearest(wave_rest, bc.BAL_LAMBDA_MAX) - 1 if bc.BAL_LAMBDA_MAX < wave_rest[-1] else len(wave_rest) - 1
 
-    ipca = np.array([comp[idx1:idx2] for comp in pca_eigen_interp])
-    balwave = wave_rest[idx1:idx2]
-    balspec = qsospec['flux'][idx1:idx2]
+    ipca = np.array([comp[indx1:indx2] for comp in pca_eigen_interp])
+    balwave = wave_rest[indx1:indx2]
+    balspec = qsospec['flux'][indx1:indx2]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        balerror = np.nan_to_num(np.sqrt(1. / qsospec['ivar'][idx1:idx2]))
+        balerror = np.nan_to_num(np.sqrt(1. / qsospec['ivar'][indx1:indx2]))
     idata = np.array([balwave, balspec, balerror])
 
     calcmask = np.ones(len(balwave), dtype=bool)
     nmasked_prev = -1
-
-    calcmask = np.ones(len(balwave), dtype=bool)
-    nmasked_prev = -1
     itr = 0
-    while itr < maxiter and np.sum(calcmask) != nmasked_prev:
-        nmasked_prev = np.sum(calcmask)
+    while (itr < maxiter):
+        # Fit for the PCA coefficients
         calcpcaout = fitpca(idata, zspec, ipca, calcmask)
-        calcpcacoeffs = calcpcaout[:-1]
-        calcmodel = np.dot(calcpcacoeffs, ipca)
+        ### Modified to allow different numbers of PCA components
+        calcpcacoeffs = calcpcaout[:len(ipca)]
+        calcmodel = np.zeros(len(balwave), dtype=float)
+        for i in range(len(calcpcacoeffs)):
+            calcmodel += calcpcacoeffs[i]*ipca[i]
+        if debug:
+            print("calcbalparams: shapes ", ipca.shape, idata.shape, balwave.shape, balspec.shape, calcmodel.shape)
+        # Solve for BAL parameters
         calcinfo = calculatebalinfo(idata, calcmodel, verbose=verbose)
+        # Create a mask based on those troughs
         calcmask = baltomask(calcinfo, balwave)
-        itr += 1
+        if verbose:
+            print(itr, nmasked)
+        if sum(calcmask) == nmasked:
+            itr = maxiter
+        else:
+            nmasked = sum(calcmask)
+            itr = itr + 1
+
 
     sdsschi2 = 9e9
     if not is_desi_spec:
         sdsschi2 = sdsschisq(qsospec, zspec)
-        if calcpcaout[-1] > 1.5 * sdsschi2:
+        if calcpcaout[-2] > 1.5 * sdsschi2:
             if verbose:
                 print("Warning: SDSS model is a better fit. Using it for BAL params.")
-            calcinfo = calculatebalinfo(idata, qsospec['model'][idx1:idx2], verbose)
+            calcinfo = calculatebalinfo(idata, qsospec['model'][indx1:indx2], verbose)
             calcmask = baltomask(calcinfo, balwave)
             calcpcaout[:len(ipca)] = -1. # Invalidate PCA coeffs
 
