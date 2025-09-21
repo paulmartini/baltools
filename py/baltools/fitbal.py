@@ -862,7 +862,7 @@ def calcbalparams(qsospec, pcaeigen, zspec, maxiter=10, verbose=False):
     itr = 0
     while itr < maxiter and np.sum(calcmask) != nmasked_prev:
         nmasked_prev = np.sum(calcmask)
-        calcpcaout = fitpca(idata, ipca, calcmask)
+        calcpcaout = fitpca(idata, zspec, ipca, calcmask)
         calcpcacoeffs = calcpcaout[:-1]
         calcmodel = np.dot(calcpcacoeffs, ipca)
         calcinfo = calculatebalinfo(idata, calcmodel, verbose=verbose)
