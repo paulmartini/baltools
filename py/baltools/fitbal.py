@@ -291,10 +291,14 @@ def calculatebalinfo(idata, model, verbose=False):
     speed_c_ai = speed[speed_min:speed_max_ai]
 
     # Produce spectra for AI, BI determination that are normalized by the model
-    normal_flux_bi = balspec[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
-    normal_flux_ai = balspec[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
-    sigma_bi = sigma_origin[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
-    sigma_ai = sigma_origin[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
+    #normal_flux_bi = balspec[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
+    #normal_flux_ai = balspec[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
+    normal_flux_bi = np.divide(balspec[plotmin:speed_max_bi], model_1_origin[plotmin:speed_max_bi], out=np.full_like(model_1_origin[plotmin:speed_max_bi], np.inf), where=model_1_origin[plotmin:speed_max_bi] !=0)
+    normal_flux_ai = np.divide(balspec[plotmin:speed_max_ai], model_1_origin[plotmin:speed_max_ai], out=np.full_like(model_1_origin[plotmin:speed_max_ai], np.inf), where=model_1_origin[plotmin:speed_max_ai] !=0)
+    #sigma_bi = sigma_origin[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
+    #sigma_ai = sigma_origin[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
+    sigma_bi = np.divide(sigma_origin[plotmin:speed_max_bi], model_1_origin[plotmin:speed_max_bi], out=np.full_like(model_1_origin[plotmin:speed_max_bi], np.inf), where=model_1_origin[plotmin:speed_max_bi] !=0)
+    sigma_ai = np.divide(sigma_origin[plotmin:speed_max_ai], model_1_origin[plotmin:speed_max_ai], out=np.full_like(model_1_origin[plotmin:speed_max_ai], np.inf), where=model_1_origin[plotmin:speed_max_ai] !=0)
 
     # Compute the median SNR over the range from -25000 to 0 km/s
     # balinfo['SNR_CIV'] = np.median( balspec[plotmin:speed_max_ai] / np.sqrt( sigma_origin[plotmin:speed_max_ai] ) ) 
@@ -432,14 +436,20 @@ def calculatebalinfo(idata, model, verbose=False):
         speed_max_ai = np.where(speed >= 0)[0][0]
         speed_c_bi = speed[speed_min:speed_max_bi]
         speed_c_ai = speed[speed_min:speed_max_ai]
-        normal_flux = balspec[speed_min:speed_max] / model_1_origin[speed_min:speed_max]
+        # normal_flux = balspec[speed_min:speed_max] / model_1_origin[speed_min:speed_max]
         speed_c = speed[speed_min:speed_max]
-        normal_flux_bi = balspec[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
-        normal_flux_ai = balspec[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
+        #normal_flux_bi = balspec[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
+        #normal_flux_ai = balspec[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
+        normal_flux_bi = np.divide(balspec[plotmin:speed_max_bi], model_1_origin[plotmin:speed_max_bi], out=np.full_like(model_1_origin[plotmin:speed_max_bi], np.inf), where=model_1_origin[plotmin:speed_max_bi] !=0)
+        normal_flux_ai = np.divide(balspec[plotmin:speed_max_ai], model_1_origin[plotmin:speed_max_ai], out=np.full_like(model_1_origin[plotmin:speed_max_ai], np.inf), where=model_1_origin[plotmin:speed_max_ai] !=0)
+
         # plotmax = plotmin + 500
         plotmax = np.where(speed >= bc.VMAX_BAL)[0][0]   # Changed 29 Mar 2020 by PM
-        sigma_bi = sigma_origin[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
-        sigma_ai = sigma_origin[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
+        #sigma_bi = sigma_origin[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
+        #sigma_ai = sigma_origin[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
+        sigma_bi = np.divide(sigma_origin[plotmin:speed_max_bi], model_1_origin[plotmin:speed_max_bi], out=np.full_like(model_1_origin[plotmin:speed_max_bi], np.inf), where=model_1_origin[plotmin:speed_max_bi] !=0)
+        sigma_ai = np.divide(sigma_origin[plotmin:speed_max_ai], model_1_origin[plotmin:speed_max_ai], out=np.full_like(model_1_origin[plotmin:speed_max_ai], np.inf), where=model_1_origin[plotmin:speed_max_ai] !=0)
+
 
         # Determine SiIV AI troughs
         if np.median(balspec[plotmin:speed_max_ai]) > np.median(sigma_origin[plotmin:speed_max_ai]): 
