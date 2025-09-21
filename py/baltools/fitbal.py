@@ -448,8 +448,8 @@ def calculatebalinfo(idata, model, verbose=False):
         plotmax = np.where(speed >= bc.VMAX_BAL)[0][0]   # Changed 29 Mar 2020 by PM
         #sigma_bi = sigma_origin[plotmin:speed_max_bi] / model_1_origin[plotmin:speed_max_bi]
         #sigma_ai = sigma_origin[plotmin:speed_max_ai] / model_1_origin[plotmin:speed_max_ai]
-        sigma_bi = np.divide(sigma_origin[plotmin:speed_max_bi], model_1_origin[plotmin:speed_max_bi], out=np.full_like(model_1_origin[plotmin:speed_max_bi], np.inf), where=model_1_origin[plotmin:speed_max_bi] !=0)
-        sigma_ai = np.divide(sigma_origin[plotmin:speed_max_ai], model_1_origin[plotmin:speed_max_ai], out=np.full_like(model_1_origin[plotmin:speed_max_ai], np.inf), where=model_1_origin[plotmin:speed_max_ai] !=0)
+        sigma_bi = np.divide(sigma_origin[plotmin:speed_max_bi], model_1_origin_safe[plotmin:speed_max_bi], out=np.full_like(model_1_origin_safe[plotmin:speed_max_bi], np.inf), where=model_1_origin_safe[plotmin:speed_max_bi] !=0)
+        sigma_ai = np.divide(sigma_origin[plotmin:speed_max_ai], model_1_origin_safe[plotmin:speed_max_ai], out=np.full_like(model_1_origin_safe[plotmin:speed_max_ai], np.inf), where=model_1_origin_safe[plotmin:speed_max_ai] !=0)
 
 
         # Determine SiIV AI troughs
