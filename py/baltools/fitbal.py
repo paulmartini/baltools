@@ -5,79 +5,58 @@ baltools.fitbal
 
 Routines to fit PCA components to QSOs and calculate BAL properties
 
-2018 by Zhiyuan Guo
-2019 updated and expanded by Paul Martini
-2020 PM converted classifydesiqso by Victoria Niu into desibalfinder() 
-
-PM Notes:
-  25 June 2019: Changed balinfo to python dictionary
 
 """
 
 import math
+import warnings
+from typing import Dict, List, Tuple, Optional
+
 import numpy as np
 import scipy.optimize as opt
-import warnings
+from numpy.typing import NDArray
 
 from baltools import balconfig as bc
 
-import matplotlib.pyplot as plt
-
 debug = False
 
-def initialize():
-    '''
-    Initialize the balinfo dictionary
 
-    Parameters
-    ----------
-    none
+# ==============================================================================
+# 1. DICTIONARY AND DATA INITIALIZATION
+# ==============================================================================
 
-    Returns
-    -------
-    balinfo : dict
-        empty balinfo dictionary 
-    '''
-    
-    balinfo = {}
 
-    balinfo['TROUGH_10K'] = 0
+def initialize() -> Dict:
+    """
+    Initialize the balinfo dictionary.
+    """
 
-    balinfo['BI_CIV'] = 0.
-    balinfo['BI_CIV_ERR'] = 0.
-    balinfo['NCIV_2000'] = 0.
-    balinfo['VMIN_CIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['VMAX_CIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['POSMIN_CIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['FMIN_CIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-
-    balinfo['AI_CIV'] = 0.
-    balinfo['AI_CIV_ERR'] = 0.
-    balinfo['NCIV_450'] = 0.
-    balinfo['VMIN_CIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['VMAX_CIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['POSMIN_CIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['FMIN_CIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-
-    balinfo['BI_SIIV'] = 0.
-    balinfo['BI_SIIV_ERR'] = 0.
-    balinfo['NSIIV_2000'] = 0.
-    balinfo['VMIN_SIIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['VMAX_SIIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['POSMIN_SIIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['FMIN_SIIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-
-    balinfo['AI_SIIV'] = 0.
-    balinfo['AI_SIIV_ERR'] = 0.
-    balinfo['NSIIV_450'] = 0.
-    balinfo['VMIN_SIIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['VMAX_SIIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['POSMIN_SIIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['FMIN_SIIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-
-    balinfo['SNR_CIV'] = -1.
-
+    balinfo = {
+        'TROUGH_10K': 0, 'SNR_CIV': -1.,
+        'SNR_REDSIDE': -1., 'SNR_FOREST': -1.,
+        'BI_CIV': 0., 'BI_CIV_ERR': 0., 'NCIV_2000': 0,
+        'VMIN_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'VMAX_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'POSMIN_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'FMIN_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'AI_CIV': 0., 'AI_CIV_ERR': 0., 'NCIV_450': 0,
+        'VMIN_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'VMAX_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'POSMIN_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'FMIN_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'BI_SIIV': 0., 'BI_SIIV_ERR': 0., 'NSIIV_2000': 0,
+        'VMIN_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'VMAX_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'POSMIN_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'FMIN_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'AI_SIIV': 0., 'AI_SIIV_ERR': 0., 'NSIIV_450': 0,
+        'VMIN_SIIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'VMAX_SIIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'POSMIN_SIIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'FMIN_SIIV_450': -1. * np.ones(bc.NAI, dtype=float),
+    }
     return balinfo
+
 
 def determine_trough_BI(norm_flux, norm_sigma, speed_c):
     '''
@@ -818,94 +797,91 @@ def calcbalparams(qsospec, pcaeigen, zspec, maxiter=10, verbose=False):
         mask of BAL troughs
     '''
 
-    DFLAG = True # DESI data or SDSS? 
     try:
-        wave_rest = qsospec['wave']/(1+zspec)
-    except ValueError:
-        DFLAG = False
-        try:
-            wave_rest = np.power(10, qsospec['loglam'])/(1+zspec)
-        except:
-            print("Error: 'wave' and 'loglam' not found") 
+        wave_rest = qsospec['wave'] / (1 + zspec)
+        is_desi_spec = True
+    except (ValueError, KeyError):
+        wave_rest = 10**qsospec['loglam'] / (1 + zspec)
+        is_desi_spec = False
 
-    # wave_rest = np.power(10, qsospec['loglam'])/(1+zspec)
+    if wave_rest[-1] < bc.lambdaCIV or wave_rest[0] > bc.lambdaCIV:
+        raise RuntimeError("Spectrum does not cover the CIV line region.")
 
-    # if wave_rest does not extend past CIV, return empty balinfo
-    if wave_rest[-1] < bc.lambdaCIV: 
-        print("Spectrum does not extend red enough to include the CIV line")
-        raise RuntimeError("Spectrum does not extend red enough to include the CIV line")
-    if wave_rest[0] > bc.lambdaCIV: 
-        print("Spectrum does not extend blue enough to include the CIV line")
-        raise RuntimeError("Spectrum does not extend blue enough to include the CIV line")
+    # interpolate the PCA eigenspectra onto this wavelength grid
+    pca_eigen_interp = [np.interp(wave_rest, pcaeigen['WAVE'], pcaeigen[name])
+                        for name in pcaeigen.dtype.names if name != 'WAVE']
 
-    # Interpolate the PCA components onto the rest wavelength values
-    ### Code changes to replace hardcoded array
-    pca_eigen = []
-    for item in pcaeigen.dtype.names:
-        if item == 'WAVE' : continue
-        pca_eigen.append(np.interp(wave_rest, pcaeigen['WAVE'], pcaeigen[item]))
-    
-    # index of shortest wavelength will be the wavelength of either 
-    # bc.BAL_LAMBDA_MIN or wave_rest[0]
-    indx1 = 0
-    if bc.BAL_LAMBDA_MIN > wave_rest[0]:
-        indx1 = find_nearest(wave_rest, bc.BAL_LAMBDA_MIN) + 1
+    # compute the SNR values before trimming
+    flux_full = qsospec['flux']
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        ivar_full = qsospec['ivar']
+        sigma_full = np.nan_to_num(np.sqrt(1.0 / ivar_full))
+    snr_full = np.divide(flux_full, sigma_full, out=np.zeros_like(flux_full), where=sigma_full > 0)
 
-    # index of longest wavelength will be the wavelength of either 
-    # bc.BAL_LAMBDA_MAX or wave_rest[-1]
-    indx2 = len(wave_rest) - 1
-    if bc.BAL_LAMBDA_MAX < wave_rest[-1]:
-        indx2 = find_nearest(wave_rest, bc.BAL_LAMBDA_MAX) - 1
+    # Calculate SNR_FOREST (1040, 1205, require at least 50A)
+    forest_min, forest_max = 1040., 1205.
+    coverage_start = max(wave_rest[0], forest_min)
+    coverage_end = min(wave_rest[-1], forest_max)
+    if coverage_end - coverage_start >= 50.:
+        i1 = np.searchsorted(wave_rest, max(forest_min, wave_rest[0]))
+        i2 = np.searchsorted(wave_rest, min(forest_max, wave_rest[-1]))
+        if i2 - i1 >= 1:
+            snr_forest = np.median(snr_full[i1:i2][np.isfinite(snr_full[i1:i2])])
+    else:
+        snr_forest = -1.
 
-    ### 2-D array with interpolated PCA components that replaces the hardcoded components
-    temp_pca = []
-    for item in pca_eigen:
-        temp_pca.append(item[indx1:indx2])
-    ipca = np.concatenate(temp_pca,axis=0).reshape(len(temp_pca),len(temp_pca[0]))
+    # Calculate SNR_REDSIDE (1420-1480 Angstroms)
+    redside_min, redside_max = 1420., 1480.
+    # Condition: Only calculate if the full range is available
+    if wave_rest[0] <= redside_min and wave_rest[-1] >= redside_max:
+        i1 = np.searchsorted(wave_rest, redside_min)
+        i2 = np.searchsorted(wave_rest, redside_max)
+        if i2 - i1 >= 1:
+            snr_redside = np.median(snr_full[i1:i2][np.isfinite(snr_full[i1:i2])])
+    else:
+        snr_redside = -1.
 
-    # data over the same range 
-    balwave = wave_rest[indx1:indx2]
-    balspec = qsospec['flux'][indx1:indx2]
-    balivar = qsospec['ivar'][indx1:indx2]
-    warnings.filterwarnings("ignore",category=RuntimeWarning) # eliminate divide by zero warning
-    balerror = np.nan_to_num(np.sqrt(1/balivar))
-    # balerror = 2.*balerror
+    # Trim down to the BAL region for remaining calculations
+    idx1 = find_nearest(wave_rest, bc.BAL_LAMBDA_MIN) + 1 if bc.BAL_LAMBDA_MIN > wave_rest[0] else 0
+    idx2 = find_nearest(wave_rest, bc.BAL_LAMBDA_MAX) - 1 if bc.BAL_LAMBDA_MAX < wave_rest[-1] else len(wave_rest) - 1
 
-    idata = np.array([balwave, balspec, balerror]) 
-    calcmask = np.ones(indx2-indx1, dtype=bool)
-    if verbose: 
-      print("calcbalparams: Min,max fit wavelengths: {0:.1f}, {1:.1f}".format(balwave[0], balwave[-1])) 
-      print("idata.shape = ", idata.shape) 
+    ipca = np.array([comp[idx1:idx2] for comp in pca_eigen_interp])
+    balwave = wave_rest[idx1:idx2]
+    balspec = qsospec['flux'][idx1:idx2]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        balerror = np.nan_to_num(np.sqrt(1. / qsospec['ivar'][idx1:idx2]))
+    idata = np.array([balwave, balspec, balerror])
 
-    nmasked = sum(calcmask) + 1
+    calcmask = np.ones(len(balwave), dtype=bool)
+    nmasked_prev = -1
+
+    calcmask = np.ones(len(balwave), dtype=bool)
+    nmasked_prev = -1
     itr = 0
-    while (itr < maxiter):
-        # Fit for the PCA coefficients
-        calcpcaout = fitpca(idata, zspec, ipca, calcmask)
-        ### Modified to allow different numbers of PCA components
-        calcpcacoeffs = calcpcaout[:len(ipca)]
-        calcmodel = np.zeros(len(balwave), dtype=float)
-        for i in range(len(calcpcacoeffs)):
-            calcmodel += calcpcacoeffs[i]*ipca[i] 
-        if debug: 
-            print("calcbalparams: shapes ", ipca.shape, idata.shape, balwave.shape, balspec.shape, calcmodel.shape)
-        # Solve for BAL parameters
+    while itr < maxiter and np.sum(calcmask) != nmasked_prev:
+        nmasked_prev = np.sum(calcmask)
+        calcpcaout = fitpca(idata, ipca, calcmask)
+        calcpcacoeffs = calcpcaout[:-1]
+        calcmodel = np.dot(calcpcacoeffs, ipca)
         calcinfo = calculatebalinfo(idata, calcmodel, verbose=verbose)
-        # Create a mask based on those troughs
         calcmask = baltomask(calcinfo, balwave)
-        if verbose:
-            print(itr, nmasked)
-        if sum(calcmask) == nmasked:
-            itr = maxiter
-        else:
-            nmasked = sum(calcmask)
-            itr = itr + 1
+        itr += 1
 
-    # if the SDSS model is better, use that to calculate the balparams
-    if not DFLAG: 
-        sdsschi2 = sdsschisq(qsospec, zspec) 
-    else: 
-        sdsschi2 = 999.
+    sdsschi2 = 9e9
+    if not is_desi_spec:
+        sdsschi2 = sdsschisq(qsospec, zspec)
+        if calcpcaout[-1] > 1.5 * sdsschi2:
+            if verbose:
+                print("Warning: SDSS model is a better fit. Using it for BAL params.")
+            calcinfo = calculatebalinfo(idata, qsospec['model'][idx1:idx2], verbose)
+            calcmask = baltomask(calcinfo, balwave)
+            calcpcaout[:len(ipca)] = -1. # Invalidate PCA coeffs
+
+    calcinfo['SNR_REDSIDE'] = snr_redside
+    calcinfo['SNR_FOREST'] = snr_forest
+
     calcpcaout = np.append(calcpcaout, [sdsschi2])
     
     ### THE CODE BELOW STILL NEEDS TO BE CHANGED FOR SDSS DATA

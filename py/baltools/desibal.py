@@ -7,8 +7,6 @@ DESI balfinder code. Reads in a spectrum file, fits PCA components,
 identifies BAL troughs, measures their properties, and writes a 
 BAL catalog. 
 
-Adapted from classifydesiqso by Victoria Niu
-
 """
 
 import os
@@ -248,4 +246,3 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
     fits.setval(balfilename, 'QSOTEMPS', value=balcatname, ext=1)
 
    
-    
