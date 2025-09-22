@@ -838,7 +838,12 @@ def calcbalparams(qsospec, pcaeigen, zspec, maxiter=10, verbose=False):
         i1 = np.searchsorted(wave_rest, redside_min)
         i2 = np.searchsorted(wave_rest, redside_max)
         if i2 - i1 >= 1:
-            snr_redside = np.median(snr_full[i1:i2][np.isfinite(snr_full[i1:i2])])
+            snr_slice = snr_full[i1:i2]
+            finite_snr = snr_slice[np.isfinite(snr_slice)]
+            if finite_snr.size > 0:
+                snr_redside = np.median(finite_snr)
+            else:
+                snr_redside = -1.
     else:
         snr_redside = -1.
 
