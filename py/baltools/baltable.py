@@ -94,6 +94,14 @@ def cattobalinfo(array):
         info['SNR_CIV'] = array['SNR_CIV']
     except KeyError:
         info['SNR_CIV'] = -1.
+    try:
+        info['SNR_REDSIDE'] = array['SNR_REDSIDE']
+    except KeyError:
+        info['SNR_REDSIDE'] = -1.
+    try:
+        info['SNR_FOREST'] = array['SNR_FOREST']
+    except KeyError:
+        info['SNR_FOREST'] = -1.
 
     return info
 
@@ -134,18 +142,6 @@ def initbaltab_desi(specdata, zdata, outputfile, pcaeigen, overwrite=False, rele
     col0 = fits.Column(name='TARGETID', format='K', array=specdata['TARGETID'])
     col1 = fits.Column(name='TARGET_RA', format='E', array=specdata['TARGET_RA'])
     col2 = fits.Column(name='TARGET_DEC', format='E', array=specdata['TARGET_DEC'])
-#    if release == 'daily':
-#        col3 = fits.Column(name='LAST_NIGHT', format='K', array=specdata['LAST_NIGHT'])
-#    col4 = fits.Column(name='EXPID', format='K', array=specdata['EXPID'])
-#
-#    else: 
-#        col3 = fits.Column(name='NIGHT', format='K', array=specdata['NIGHT'])
-#    if 'MJD' in specdata.colnames :
-#        col5 = fits.Column(name='MJD', format='E', array=specdata['MJD'])
-#    else :
-#        col5 = fits.Column(name='MJD', format='E', array=np.empty(NROWS, dtype=float))
-#        
-#    col6 = fits.Column(name='TILEID', format='k', array=specdata['TILEID'])
 
     # Columns to copy from the redshift data
     col7 = fits.Column(name='Z', format='E', array=zdata['Z'])
@@ -165,6 +161,10 @@ def initbaltab_desi(specdata, zdata, outputfile, pcaeigen, overwrite=False, rele
     zint_col = np.zeros([NROWS], dtype=float)
     zfloat_bicol = np.zeros([NROWS, bc.NBI], dtype=float)
     zfloat_aicol = np.zeros([NROWS, bc.NAI], dtype=float)
+    # Use -1.0 as the default for unmeasured physical quantities (VMIN, FMIN, SNR, etc.)
+    neg_one_float_col = np.full(NROWS, -1.0, dtype=float)
+    neg_one_bicol = np.full([NROWS, bc.NBI], -1.0, dtype=float)
+    neg_one_aicol = np.full([NROWS, bc.NAI], -1.0, dtype=float)
 
     # This will come from CNN Classifier
     col25 = fits.Column(name='BAL_PROB', format='E', array=zfloat_col)
@@ -173,36 +173,40 @@ def initbaltab_desi(specdata, zdata, outputfile, pcaeigen, overwrite=False, rele
     col26 = fits.Column(name='BI_CIV', format='E', array=zfloat_col)
     col27 = fits.Column(name='ERR_BI_CIV', format='E', array=zfloat_col)
     col28 = fits.Column(name='NCIV_2000', format='J', array=zint_col)
-    col29 = fits.Column(name='VMIN_CIV_2000', format='5E', array=zfloat_bicol)
-    col30 = fits.Column(name='VMAX_CIV_2000', format='5E', array=zfloat_bicol)
-    col31 = fits.Column(name='POSMIN_CIV_2000', format='5E', array=zfloat_bicol)
-    col32 = fits.Column(name='FMIN_CIV_2000', format='5E', array=zfloat_bicol)
+    col29 = fits.Column(name='VMIN_CIV_2000', format='5E', array=neg_one_bicol)
+    col30 = fits.Column(name='VMAX_CIV_2000', format='5E', array=neg_one_bicol)
+    col31 = fits.Column(name='POSMIN_CIV_2000', format='5E', array=neg_one_bicol)
+    col32 = fits.Column(name='FMIN_CIV_2000', format='5E', array=neg_one_bicol)
 
     col33 = fits.Column(name='AI_CIV', format='E', array=zfloat_col)
     col34 = fits.Column(name='ERR_AI_CIV', format='E', array=zfloat_col)
     col35 = fits.Column(name='NCIV_450', format='J', array=zint_col)
-    col36 = fits.Column(name='VMIN_CIV_450', format='17E', array=zfloat_aicol)
-    col37 = fits.Column(name='VMAX_CIV_450', format='17E', array=zfloat_aicol)
-    col38 = fits.Column(name='POSMIN_CIV_450', format='17E', array=zfloat_aicol)
-    col39 = fits.Column(name='FMIN_CIV_450', format='17E', array=zfloat_aicol)
+    col36 = fits.Column(name='VMIN_CIV_450', format='17E', array=neg_one_aicol)
+    col37 = fits.Column(name='VMAX_CIV_450', format='17E', array=neg_one_aicol)
+    col38 = fits.Column(name='POSMIN_CIV_450', format='17E', array=neg_one_aicol)
+    col39 = fits.Column(name='FMIN_CIV_450', format='17E', array=neg_one_aicol)
 
     col40 = fits.Column(name='BI_SIIV', format='E', array=zfloat_col)
     col41 = fits.Column(name='ERR_BI_SIIV', format='E', array=zfloat_col)
     col42 = fits.Column(name='NSIIV_2000', format='J', array=zint_col)
-    col43 = fits.Column(name='VMIN_SIIV_2000', format='5E', array=zfloat_bicol)
-    col44 = fits.Column(name='VMAX_SIIV_2000', format='5E', array=zfloat_bicol)
-    col45 = fits.Column(name='POSMIN_SIIV_2000', format='5E', array=zfloat_bicol)
-    col46 = fits.Column(name='FMIN_SIIV_2000', format='5E', array=zfloat_bicol)
+    col43 = fits.Column(name='VMIN_SIIV_2000', format='5E', array=neg_one_bicol)
+    col44 = fits.Column(name='VMAX_SIIV_2000', format='5E', array=neg_one_bicol)
+    col45 = fits.Column(name='POSMIN_SIIV_2000', format='5E', array=neg_one_bicol)
+    col46 = fits.Column(name='FMIN_SIIV_2000', format='5E', array=neg_one_bicol)
 
     col47 = fits.Column(name='AI_SIIV', format='E', array=zfloat_col)
     col48 = fits.Column(name='ERR_AI_SIIV', format='E', array=zfloat_col)
     col49 = fits.Column(name='NSIIV_450', format='J', array=zint_col)
-    col50 = fits.Column(name='VMIN_SIIV_450', format='17E', array=zfloat_aicol)
-    col51 = fits.Column(name='VMAX_SIIV_450', format='17E', array=zfloat_aicol)
-    col52 = fits.Column(name='POSMIN_SIIV_450', format='17E', array=zfloat_aicol)
-    col53 = fits.Column(name='FMIN_SIIV_450', format='17E', array=zfloat_aicol)
+    col50 = fits.Column(name='VMIN_SIIV_450', format='17E', array=neg_one_aicol)
+    col51 = fits.Column(name='VMAX_SIIV_450', format='17E', array=neg_one_aicol)
+    col52 = fits.Column(name='POSMIN_SIIV_450', format='17E', array=neg_one_aicol)
+    col53 = fits.Column(name='FMIN_SIIV_450', format='17E', array=neg_one_aicol)
 
-    col54 = fits.Column(name='SNR_CIV', format='E', array=zfloat_col)
+    col54 = fits.Column(name='SNR_CIV', format='E', array=neg_one_float_col)
+
+    # other quantites 
+    col55 = fits.Column(name='SNR_REDSIDE', format='E', array=neg_one_float_col)
+    col56 = fits.Column(name='SNR_FOREST', format='E', array=neg_one_float_col)
 
     balhead = fits.Header({'SIMPLE': True})
     balhead['EXTNAME'] = "BALCAT"
@@ -215,7 +219,7 @@ def initbaltab_desi(specdata, zdata, outputfile, pcaeigen, overwrite=False, rele
                                             col37, col38, col39, col40, col41,
                                             col42, col43, col44, col45, col46,
                                             col47, col48, col49, col50, col51,
-                                            col52, col53, col54], 
+                                            col52, col53, col54, col55, col56], 
                                             header=balhead)
 
     tabhdu.writeto(outputfile, overwrite=overwrite)
@@ -285,6 +289,8 @@ def updatebaltab_desi(targetid, balhdu, info, pcaout, pcaeigen):
     balhdu[1].data[qindx]['FMIN_SIIV_450'] = info['FMIN_SIIV_450']
 
     balhdu[1].data[qindx]['SNR_CIV'] = info['SNR_CIV']
+    balhdu[1].data[qindx]['SNR_REDSIDE'] = info['SNR_REDSIDE']
+    balhdu[1].data[qindx]['SNR_FOREST'] = info['SNR_FOREST']
 
     return balhdu
 
