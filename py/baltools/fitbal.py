@@ -5,19 +5,15 @@ baltools.fitbal
 
 Routines to fit PCA components to QSOs and calculate BAL properties
 
-2018 by Zhiyuan Guo
-2019 updated and expanded by Paul Martini
-2020 PM converted classifydesiqso by Victoria Niu into desibalfinder() 
-
-PM Notes:
-  25 June 2019: Changed balinfo to python dictionary
-
 """
 
 import math
+import warnings
+from typing import Dict, List, Tuple, Optional
+
 import numpy as np
 import scipy.optimize as opt
-import warnings
+from numpy.typing import NDArray
 
 from baltools import balconfig as bc
 
@@ -25,7 +21,7 @@ import matplotlib.pyplot as plt
 
 debug = False
 
-def initialize():
+def initialize() -> Dict:
     '''
     Initialize the balinfo dictionary
 
@@ -39,45 +35,32 @@ def initialize():
         empty balinfo dictionary 
     '''
     
-    balinfo = {}
-
-    balinfo['TROUGH_10K'] = 0
-
-    balinfo['BI_CIV'] = 0.
-    balinfo['BI_CIV_ERR'] = 0.
-    balinfo['NCIV_2000'] = 0.
-    balinfo['VMIN_CIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['VMAX_CIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['POSMIN_CIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['FMIN_CIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-
-    balinfo['AI_CIV'] = 0.
-    balinfo['AI_CIV_ERR'] = 0.
-    balinfo['NCIV_450'] = 0.
-    balinfo['VMIN_CIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['VMAX_CIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['POSMIN_CIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['FMIN_CIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-
-    balinfo['BI_SIIV'] = 0.
-    balinfo['BI_SIIV_ERR'] = 0.
-    balinfo['NSIIV_2000'] = 0.
-    balinfo['VMIN_SIIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['VMAX_SIIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['POSMIN_SIIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-    balinfo['FMIN_SIIV_2000'] = -1.*np.ones(bc.NBI, dtype=float)
-
-    balinfo['AI_SIIV'] = 0.
-    balinfo['AI_SIIV_ERR'] = 0.
-    balinfo['NSIIV_450'] = 0.
-    balinfo['VMIN_SIIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['VMAX_SIIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['POSMIN_SIIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-    balinfo['FMIN_SIIV_450'] = -1.*np.ones(bc.NAI, dtype=float)
-
-    balinfo['SNR_CIV'] = -1.
-
+    balinfo = {
+        'TROUGH_10K': 0, 'SNR_CIV': -1.,
+        'SNR_REDSIDE': -1., 'SNR_FOREST': -1.,
+        'BI_CIV': 0., 'BI_CIV_ERR': 0., 'NCIV_2000': 0,
+        'VMIN_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'VMAX_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'POSMIN_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'FMIN_CIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'AI_CIV': 0., 'AI_CIV_ERR': 0., 'NCIV_450': 0,
+        'VMIN_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'VMAX_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'POSMIN_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'FMIN_CIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'BI_SIIV': 0., 'BI_SIIV_ERR': 0., 'NSIIV_2000': 0,
+        'VMIN_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'VMAX_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'POSMIN_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'FMIN_SIIV_2000': -1. * np.ones(bc.NBI, dtype=float),
+        'AI_SIIV': 0., 'AI_SIIV_ERR': 0., 'NSIIV_450': 0,
+        'VMIN_SIIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'VMAX_SIIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'POSMIN_SIIV_450': -1. * np.ones(bc.NAI, dtype=float),
+        'FMIN_SIIV_450': -1. * np.ones(bc.NAI, dtype=float),
+    }
     return balinfo
+
 
 def determine_trough_BI(norm_flux, norm_sigma, speed_c):
     '''
@@ -828,7 +811,41 @@ def calcbalparams(qsospec, pcaeigen, zspec, maxiter=10, verbose=False):
         except:
             print("Error: 'wave' and 'loglam' not found") 
 
-    # wave_rest = np.power(10, qsospec['loglam'])/(1+zspec)
+    # compute the SNR values before trimming
+    flux_full = qsospec['flux']
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        ivar_full = qsospec['ivar']
+        sigma_full = np.nan_to_num(np.sqrt(1.0 / ivar_full))
+    snr_full = np.divide(flux_full, sigma_full, out=np.zeros_like(flux_full), where=sigma_full > 0)
+
+    # Calculate SNR_FOREST (1040, 1205, require at least 50A)
+    forest_min, forest_max = 1040., 1205.
+    coverage_start = max(wave_rest[0], forest_min)
+    coverage_end = min(wave_rest[-1], forest_max)
+    if coverage_end - coverage_start >= 50.:
+        i1 = np.searchsorted(wave_rest, max(forest_min, wave_rest[0]))
+        i2 = np.searchsorted(wave_rest, min(forest_max, wave_rest[-1]))
+        if i2 - i1 >= 1:
+            snr_forest = np.median(snr_full[i1:i2][np.isfinite(snr_full[i1:i2])])
+    else:
+        snr_forest = -1.
+
+    # Calculate SNR_REDSIDE (1420-1480 Angstroms)
+    redside_min, redside_max = 1420., 1480.
+    # Condition: Only calculate if the full range is available
+    if wave_rest[0] <= redside_min and wave_rest[-1] >= redside_max:
+        i1 = np.searchsorted(wave_rest, redside_min)
+        i2 = np.searchsorted(wave_rest, redside_max)
+        if i2 - i1 >= 1:
+            snr_slice = snr_full[i1:i2]
+            finite_snr = snr_slice[np.isfinite(snr_slice)]
+            if finite_snr.size > 0:
+                snr_redside = np.median(finite_snr)
+            else:
+                snr_redside = -1.
+    else:
+        snr_redside = -1.
 
     # if wave_rest does not extend past CIV, return empty balinfo
     if wave_rest[-1] < bc.lambdaCIV: 
@@ -906,6 +923,7 @@ def calcbalparams(qsospec, pcaeigen, zspec, maxiter=10, verbose=False):
         sdsschi2 = sdsschisq(qsospec, zspec) 
     else: 
         sdsschi2 = 999.
+
     calcpcaout = np.append(calcpcaout, [sdsschi2])
     
     ### THE CODE BELOW STILL NEEDS TO BE CHANGED FOR SDSS DATA
@@ -920,6 +938,9 @@ def calcbalparams(qsospec, pcaeigen, zspec, maxiter=10, verbose=False):
             calcpcaout[2] = -1.
             calcpcaout[3] = -1.
             calcpcaout[4] = -1.
+
+    calcinfo['SNR_REDSIDE'] = snr_redside
+    calcinfo['SNR_FOREST'] = snr_forest
 
     return calcinfo, calcpcaout, calcmask
 

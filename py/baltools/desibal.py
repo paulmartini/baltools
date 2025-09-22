@@ -246,6 +246,4 @@ def desibalfinder(specfilename, alttemp=False, altbaldir=None, altzdir=None, zfi
     else:
         balcatname = bc.pcaeigenfile
     fits.setval(balfilename, 'QSOTEMPS', value=balcatname, ext=1)
-
-   
     
