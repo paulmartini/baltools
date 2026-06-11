@@ -42,7 +42,7 @@ hostname = socket.gethostname()
 
 # if 'cori' in hostname: 
 if '/global/homes' in homedir:  # should be true if at NERSC
-    catdir = homedir + '/Catalogs/'
+    catdir = homedir + '/Repos/baltools/data/'
     specdir1 = '/global/cfs/projectdirs/sdss/staging/dr14/eboss/spectro/redux/v5_10_0/spectra/lite/'
     specdir2 = '/global/cfs/projectdirs/sdss/staging/dr9/sdss/spectro/redux/'
     # specdir = '/global/projecta/projectdirs/sdss/staging/dr14/sdss/spectro/redux/v5_10_0/spectra/lite/' 
