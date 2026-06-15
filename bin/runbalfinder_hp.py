@@ -31,7 +31,7 @@ from baltools import desibal as db
 from baltools import utils
 
 # Set DESI environment
-os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
+os.environ.setdefault('DESI_SPECTRO_REDUX', '/global/cfs/cdirs/desi/spectro/redux')
 
 
 class FileCache:
@@ -288,8 +288,8 @@ def parse_arguments(options: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument('-l', '--logfile', type=str, default='logfile.txt', required=False,
                         help='Name of log file written to altzdir, default is logfile.txt')
 
-    parser.add_argument('--nproc', type=int, default=256, required=False,
-                        help='Number of processes (default: 256 for NERSC nodes)')
+    parser.add_argument('--nproc', type=int, default=32, required=False,
+                        help='Number of processes (default: 32; NSIDE=16 coadd files are ~1-2 GB each so memory limits nproc to ~32-64 per node)')
 
     parser.add_argument('-c', '--clobber', default=False, required=False, action='store_true',
                         help='Clobber (overwrite) BAL catalog if it already exists?')

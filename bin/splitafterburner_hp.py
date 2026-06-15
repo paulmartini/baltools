@@ -26,7 +26,7 @@ from baltools import balconfig as bc
 from baltools import popqsotab as pt
 from baltools import utils
 
-os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
+os.environ.setdefault('DESI_SPECTRO_REDUX', '/global/cfs/cdirs/desi/spectro/redux')
 
 def calculate_healpix_vectorized(ra: np.ndarray, dec: np.ndarray, nside: int = 64) -> np.ndarray:
     """
@@ -249,6 +249,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--mock', default=False, required=False, action='store_true',
                         help='Mock catalog?, default is False')
 
+    parser.add_argument('--nside', type=int, default=64, required=False,
+                        help='HEALPix NSIDE for splitting (default 64 for older releases like everest/fuji; use 16 for matterhorn and later)')
+
     parser.add_argument('-l', '--logfile', type=str, default='logfile-{survey}-{moon}.txt', required=False,
                         help='Name of log file written to outdir, default is logfile-{survey}-{moon}.txt')
 
@@ -303,7 +306,7 @@ def main() -> None:
     if args.mock:
         healpixels = calculate_healpix_vectorized(qcat['RA'], qcat['DEC'], nside=16)
     else:
-        healpixels = calculate_healpix_vectorized(qcat['TARGET_RA'], qcat['TARGET_DEC'], nside=64)
+        healpixels = calculate_healpix_vectorized(qcat['TARGET_RA'], qcat['TARGET_DEC'], nside=args.nside)
 
     # Construct a list of unique healpix pixels
     healpixlist = np.unique(healpixels)

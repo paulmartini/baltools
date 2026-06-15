@@ -59,11 +59,37 @@ def balcopy(qinfo: np.ndarray, binfo: np.ndarray) -> None:
     qinfo['BALMASK'] = 0
 
 
-def calculate_healpix(qcat, mock):
+def detect_nside(baldir, survey, moon):
+    """
+    Infer HEALPix NSIDE from the healpix directory names already present in baldir.
+    Returns the inferred NSIDE, or None if the directory is empty or absent.
+    """
+    search_dir = Path(baldir) / "healpix" / survey / moon
+    if not search_dir.exists():
+        return None
+    max_pixel = -1
+    for parent in search_dir.iterdir():
+        if not parent.is_dir():
+            continue
+        for hpdir in parent.iterdir():
+            if hpdir.is_dir() and hpdir.name.isdigit():
+                max_pixel = max(max_pixel, int(hpdir.name))
+    if max_pixel < 0:
+        return None
+    # 12 * nside^2 gives total pixel count; use thresholds for common DESI values
+    if max_pixel < hp.nside2npix(16):   # < 3072  → NSIDE=16
+        return 16
+    elif max_pixel < hp.nside2npix(64): # < 49152 → NSIDE=64
+        return 64
+    else:
+        return 128
+
+
+def calculate_healpix(qcat, mock, nside=64):
     if mock:
         return hp.ang2pix(16, qcat['RA'], qcat['DEC'], lonlat=True, nest=True)
     else:
-        return hp.ang2pix(64, qcat['TARGET_RA'], qcat['TARGET_DEC'], lonlat=True, nest=True)
+        return hp.ang2pix(nside, qcat['TARGET_RA'], qcat['TARGET_DEC'], lonlat=True, nest=True)
 
 
 def match_targets(qso_targetids, bal_targetids):
@@ -84,7 +110,8 @@ def process_healpix_chunk(
     moon,
     mock,
     alttemp,
-    verbose
+    verbose,
+    nside=64
 ):
     """
     Each worker:
@@ -103,7 +130,7 @@ def process_healpix_chunk(
 
     # Load the new QSO catalog
     qcat = fitsio.read(str(outcat), ext=1)
-    healpixels = calculate_healpix(qcat, mock)
+    healpixels = calculate_healpix(qcat, mock, nside=nside)
     hindxs = np.arange(0, len(qcat), dtype=int)
 
     for healpix in healpix_chunk:
@@ -155,12 +182,14 @@ def parse_arguments():
     parser.add_argument('-t', '--alttemp', default=False, action='store_true', help='Use alternate components made by Allyson Brodzeller')
     parser.add_argument('--nproc', type=int, default=64, help='Number of processes for parallel processing')
     parser.add_argument('--chunk-size', type=int, default=160, help='Healpix per worker chunk')
+    parser.add_argument('--nside', type=int, default=None, required=False,
+                        help='HEALPix NSIDE (default: auto-detect from baldir, fall back to 64)')
     return parser.parse_args()
 
 
 def main():
     args = parse_arguments()
-    os.environ['DESI_SPECTRO_REDUX'] = '/global/cfs/cdirs/desi/spectro/redux'
+    os.environ.setdefault('DESI_SPECTRO_REDUX', '/global/cfs/cdirs/desi/spectro/redux')
 
     qsocat_path = Path(args.qsocat)
     outcat = Path(args.outcatfile)
@@ -173,8 +202,26 @@ def main():
     cols = pt.inittab(str(qsocat_path), str(outcat), alttemp=args.alttemp)
     qcat = fitsio.read(str(outcat), ext=1)
 
+    # Resolve NSIDE: explicit arg > auto-detect from baldir > default 64
+    if args.nside is not None:
+        nside = args.nside
+        if args.verbose:
+            print(f"Using NSIDE={nside} (from --nside argument)")
+    elif not args.mock:
+        detected = detect_nside(args.baldir, args.survey, args.moon)
+        if detected is not None:
+            nside = detected
+            if args.verbose:
+                print(f"Auto-detected NSIDE={nside} from baldir directory structure")
+        else:
+            nside = 64
+            if args.verbose:
+                print(f"Could not auto-detect NSIDE; defaulting to {nside}")
+    else:
+        nside = 16  # mock always uses 16
+
     # Calculate healpix for every QSO
-    healpixels = calculate_healpix(qcat, args.mock)
+    healpixels = calculate_healpix(qcat, args.mock, nside=nside)
     healpixlist = np.unique(healpixels)
 
     if args.verbose:
@@ -210,7 +257,8 @@ def main():
                 args.moon,
                 args.mock,
                 args.alttemp,
-                args.verbose
+                args.verbose,
+                nside
             ) for chunk in healpix_chunks
         ]
         for future in as_completed(futures):

@@ -15,6 +15,7 @@ source $CFS/desi/software/desi_environment.sh main
 export PATH=$HOME/Repos/baltools/bin:$PATH
 export PYTHONPATH="${PYTHONPATH}:$HOME/Repos/baltools/py"
 
+export DESI_SPECTRO_REDUX=/global/cfs/cdirs/desi/spectro/redux
 export qsocat=/global/cfs/cdirs/desi/survey/catalogs/DA2/QSO/loa/QSO_cat_loa_main_dark_healpix_v2.fits
 export altzdir=$PSCRATCH/balwork/loa-v2
 export outdir=/global/cfs/cdirs/desi/users/martini/bal-catalogs/loa
@@ -34,9 +35,9 @@ echo "# using this version of python"
 which python
 
 date
-srun -N 1 splitafterburner_hp.py --qsocat $qsocat --survey main --moon dark --altzdir $altzdir --zfileroot zafter -v
+srun -N 1 splitafterburner_hp.py --qsocat $qsocat --survey main --moon dark --altzdir $altzdir --zfileroot zafter --nside 16 -v
 date
-srun -N 1 runbalfinder_hp.py -r loa -s main -m dark -a $altzdir -z zafter -v --nproc 256 --alttemp --tids
+srun -N 1 runbalfinder_hp.py -r loa -s main -m dark -a $altzdir -z zafter -v --nproc 32 --alttemp --tids
 date
 srun -N 1  appendbalinfo_hp.py -q $qsocat -b $altzdir -o $outdir/$outcat -m dark -s main -v --alttemp
 date
